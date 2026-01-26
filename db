@@ -4,8 +4,6 @@ from datetime import date
 def init_db():
     conn = sqlite3.connect('admission.db')
     cursor = conn.cursor()
-    
-    # Таблица образовательных программ (ОП)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS programs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -14,7 +12,6 @@ def init_db():
     )
     ''')
     
-    # Таблица абитуриентов (основная информация)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS applicants (
         id INTEGER PRIMARY KEY,
@@ -22,7 +19,6 @@ def init_db():
     )
     ''')
     
-    # ОСНОВНАЯ ТАБЛИЦА: конкурсные списки
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS competition_lists (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,7 +38,6 @@ def init_db():
     )
     ''')
     
-    # Заполняем программы (делаем один раз)
     programs = [
         ('ПМИ', 40),
         ('ИВТ', 50),
@@ -56,7 +51,6 @@ def init_db():
     
     conn.commit()
     conn.close()
-    print("База данных инициализирована!")
 
 if __name__ == '__main__':
     init_db()
