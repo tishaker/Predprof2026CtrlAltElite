@@ -1,22 +1,47 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Загрузка конкурсных списков</h2>
-<form method="post" enctype="multipart/form-data">
-    <div class="mb-3">
-        <label for="date" class="form-label">Дата списка</label>
-        <select class="form-select" id="date" name="date" required>
-            <option value="01.08">1 августа</option>
-            <option value="02.08">2 августа</option>
-            <option value="03.08">3 августа</option>
-            <option value="04.08">4 августа</option>
-        </select>
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4>Загрузка конкурсных списков</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="date" class="form-label">Дата списка:</label>
+                        <select class="form-select" id="date" name="date" required>
+                            <option value="">Выберите дату...</option>
+                            <option value="01.08">1 августа</option>
+                            <option value="02.08">2 августа</option>
+                            <option value="03.08">3 августа</option>
+                            <option value="04.08">4 августа</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="csv_file" class="form-label">CSV файл:</label>
+                        <input class="form-control" type="file" id="csv_file" name="csv_file" accept=".csv" required>
+                        <div class="form-text">
+                            Файл должен содержать колонки: ID, Согласие, Приоритет, Физика, Русский, Математика, Достижения, Сумма, Программа
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-100">Загрузить</button>
+                </form>
+
+                <hr>
+
+                <h5>Пример CSV:</h5>
+                <pre class="bg-light p-3">
+ID,Согласие,Приоритет,Физика,Русский,Математика,Достижения,Сумма,Программа
+1,True,1,85,92,88,5,270,ПМ
+2,False,2,78,85,82,3,248,ИВТ
+3,True,1,90,88,95,8,281,ИТСС
+                </pre>
+            </div>
+        </div>
     </div>
-    <div class="mb-3">
-        <label for="file" class="form-label">CSV файл</label>
-        <input class="form-control" type="file" id="file" name="file" accept=".csv" required>
-        <div class="form-text">Файл должен содержать колонки: ID, Согласие, Приоритет, Физика, Русский, Математика, Достижения, Сумма, Программа</div>
-    </div>
-    <button type="submit" class="btn btn-success">Загрузить</button>
-</form>
+</div>
 {% endblock %}
