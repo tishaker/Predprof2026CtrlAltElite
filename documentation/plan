@@ -1,0 +1,34 @@
+admission_analysis/
+│
+├── app.py              # Основной файл приложения Flask
+├── config.py           # Конфигурация приложения
+├── requirements.txt    # Зависимости Python
+│
+├── database/
+│   ├── models.py       # Модели SQLAlchemy
+│   ├── db_init.py      # Инициализация БД
+│   └── generator.py    # Генератор тестовых данных
+│
+├── templates/          # HTML шаблоны
+│   ├── base.html
+│   ├── index.html
+│   ├── upload.html
+│   ├── lists.html
+│   ├── stats.html
+│   └── report.html
+│
+├── static/
+│   ├── css/
+│   │   └── style.css
+│   └── js/             # (пока пусто, без JS)
+│
+├── data/               # Примеры CSV файлов для загрузки
+│   ├── 01_08.csv
+│   ├── 02_08.csv
+│   └── ...
+│
+├── utils/
+│   ├── pdf_report.py   # Генерация PDF
+│   └── calculator.py   # Расчет проходного балла
+│
+└── README.md

@@ -1,0 +1,29 @@
+university-admission-system/
+│
+├── app.py                     # Основной файл Flask-приложения
+├── config.py                  # Конфигурация
+├── requirements.txt           # Зависимости Python
+├── README.md                  # Описание проекта
+│
+├── database/
+│   ├── init_db.py            # Инициализация БД
+│   ├── models.py             # Модели SQLAlchemy
+│   └── generator.py          # Генератор тестовых данных
+│
+├── templates/
+│   ├── base.html             # Базовый шаблон
+│   ├── index.html            # Главная страница
+│   ├── applicants.html       # Списки абитуриентов
+│   ├── programs.html         # Образовательные программы
+│   ├── statistics.html       # Статистика
+│   └── report.html           # Формирование отчета
+│
+├── static/
+│   ├── css/
+│   │   └── style.css         # Стили
+│   ├── js/
+│   │   └── script.js         # Скрипты
+│   └── uploads/              # Для загрузки файлов
+│
+└── reports/
+    └── generated/            # Сгенерированные PDF-отчеты

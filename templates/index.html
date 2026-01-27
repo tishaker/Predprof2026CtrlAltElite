@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="text-center">
+    <h1>Система анализа поступления</h1>
+    <p class="lead">Автоматический расчёт проходного балла и формирование отчётов</p>
+
+    <div class="row mt-5">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Загрузка данных</h5>
+                    <p>Загрузите конкурсные списки в формате CSV</p>
+                    <a href="/upload" class="btn btn-primary">Перейти</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Просмотр списков</h5>
+                    <p>Фильтрация и сортировка абитуриентов</p>
+                    <a href="/lists" class="btn btn-primary">Перейти</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Отчёты</h5>
+                    <p>Статистика и PDF-отчёты по дням</p>
+                    <a href="/stats" class="btn btn-primary">Перейти</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
