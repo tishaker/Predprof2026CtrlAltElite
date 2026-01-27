@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
 import os
-from datetime import datetime
+# from datetime import datetime
 
 # Создаем приложение
 app = Flask(__name__)
