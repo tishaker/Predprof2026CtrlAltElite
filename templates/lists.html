@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-4">Списки абитуриентов</h2>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Программа:</label>
+                <select name="program" class="form-select">
+                    <option value="all">Все программы</option>
+                    {% for prog in programs %}
+                    <option value="{{ prog }}" {% if current_program == prog %}selected{% endif %}>{{ prog }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Дата:</label>
+                <select name="date" class="form-select">
+                    <option value="all">Все даты</option>
+                    {% for d in dates %}
+                    <option value="{{ d }}" {% if current_date == d %}selected{% endif %}>{{ d }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Согласие:</label>
+                <select name="consent" class="form-select">
+                    <option value="all">Все</option>
+                    <option value="yes" {% if show_consent == 'yes' %}selected{% endif %}>Только с согласием</option>
+                    <option value="no" {% if show_consent == 'no' %}selected{% endif %}>Без согласия</option>
+                </select>
+            </div>
+
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Применить фильтры</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Таблица -->
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Программа</th>
+                <th>Дата</th>
+                <th>Приоритет</th>
+                <th>Согласие</th>
+                <th>Физика</th>
+                <th>Русский</th>
+                <th>Математика</th>
+                <th>Достижения</th>
+                <th>Сумма</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for app in applicants %}
+            <tr>
+                <td>{{ app.applicant_id }}</td>
+                <td>
+                    <span class="badge bg-primary">{{ app.program }}</span>
+                </td>
+                <td>{{ app.date }}</td>
+                <td>{{ app.priority }}</td>
+                <td>
+                    {% if app.consent %}
+                    <span class="badge bg-success">Да</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Нет</span>
+                    {% endif %}
+                </td>
+                <td>{{ app.physics }}</td>
+                <td>{{ app.russian }}</td>
+                <td>{{ app.math }}</td>
+                <td>{{ app.achievements }}</td>
+                <td><strong>{{ app.total }}</strong></td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="10" class="text-center text-muted">
+                    Нет данных для отображения
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-3 text-muted">
+    Показано: {{ applicants|length }} записей
+</div>
+{% endblock %}

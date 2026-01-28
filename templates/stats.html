@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-4">Статистика и проходные баллы</h2>
+
+{% for prog in programs %}
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h4 class="mb-0">{{ prog }} - {{ stats[prog].seats }} мест</h4>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Всего заявлений</th>
+                        <th>С согласием</th>
+                        <th>Проходной балл</th>
+                        <th>Приоритеты (1-4)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for date in dates %}
+                    <tr>
+                        <td><strong>{{ date }}</strong></td>
+                        <td>{{ stats[prog].by_date[date].total }}</td>
+                        <td>{{ stats[prog].by_date[date].consent }}</td>
+                        <td>
+                            <span class="badge {% if stats[prog].by_date[date].passing_score == 'НЕДОБОР' %}bg-warning text-dark{% else %}bg-success{% endif %}" style="font-size: 1em;">
+                                {{ stats[prog].by_date[date].passing_score }}
+                            </span>
+                        </td>
+                        <td>
+                            {% for i in range(1, 5) %}
+                            <span class="badge bg-secondary me-1">P{{ i }}: {{ stats[prog].by_date[date].priority_counts[i] }}</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<div class="alert alert-info">
+    <h5>Пояснение:</h5>
+    <ul class="mb-0">
+        <li><strong>Проходной балл</strong> - сумма баллов последнего зачисленного абитуриента</li>
+        <li><strong>НЕДОБОР</strong> - недостаточно абитуриентов с согласием для заполнения всех мест</li>
+        <li>При расчете учитываются только абитуриенты с согласием на зачисление</li>
+    </ul>
+</div>
+{% endblock %}

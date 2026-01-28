@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="text-center mb-5">
+    <h1 class="display-4">Система анализа поступления</h1>
+    <p class="lead">Автоматический расчет проходных баллов и формирование отчетов</p>
+</div>
+
+<div class="row">
+    <div class="col-md-3 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">Загрузка данных</h5>
+                <p class="card-text">Загрузите конкурсные списки в формате CSV</p>
+                <a href="/upload" class="btn btn-primary">Загрузить CSV</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">Просмотр списков</h5>
+                <p class="card-text">Фильтрация и сортировка абитуриентов</p>
+                <a href="/lists" class="btn btn-primary">Просмотреть</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">Статистика</h5>
+                <p class="card-text">Проходные баллы и анализ данных</p>
+                <a href="/stats" class="btn btn-primary">Открыть</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">Очистка БД</h5>
+                <p class="card-text">Удалить все данные</p>
+                <a href="/clear" class="btn btn-danger" onclick="return confirm('Удалить все данные?')">Очистить</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<hr class="my-5">
+
+<h3>Общая статистика</h3>
+<div class="table-responsive">
+    <table class="table table-bordered">
+        <thead class="table-dark">
+            <tr>
+                <th>Программа</th>
+                {% for date in dates %}
+                <th>{{ date }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for prog in ['ПМ', 'ИВТ', 'ИТСС', 'ИБ'] %}
+            <tr>
+                <td><strong>{{ prog }}</strong></td>
+                {% for date in dates %}
+                <td>
+                    {% if prog in stats and date in stats[prog] %}
+                    Всего: {{ stats[prog][date]['total'] }}<br>
+                    С согласием: {{ stats[prog][date]['consent'] }}
+                    {% else %}
+                    Нет данных
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
