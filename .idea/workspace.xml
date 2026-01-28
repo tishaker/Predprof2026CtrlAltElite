@@ -4,11 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5ea891ea-0b35-48f1-8ef7-77e2076d9c25" name="Changes" comment="DO NOT USE">
-      <change afterPath="$PROJECT_DIR$/documentation/example.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/work.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/work.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="5ea891ea-0b35-48f1-8ef7-77e2076d9c25" name="Changes" comment="added example" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -75,11 +71,28 @@
       <option name="project" value="LOCAL" />
       <updated>1769610459444</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="added example">
+      <option name="closed" value="true" />
+      <created>1769617014803</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1769617014803</updated>
+    </task>
+    <task id="LOCAL-00003" summary="added example">
+      <option name="closed" value="true" />
+      <created>1769617091544</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1769617091544</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="DO NOT USE" />
-    <option name="LAST_COMMIT_MESSAGE" value="DO NOT USE" />
+    <MESSAGE value="added example" />
+    <option name="LAST_COMMIT_MESSAGE" value="added example" />
   </component>
 </project>
