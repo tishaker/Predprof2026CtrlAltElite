@@ -4,17 +4,15 @@ import pandas as pd
 import os
 # from datetime import datetime
 
-# Создаем приложение
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///admission.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
-# Инициализируем БД
+
 db = SQLAlchemy(app)
 
-# Создаем папки если их нет
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs('reports', exist_ok=True)
 
@@ -45,16 +43,16 @@ def index():
     dates = [d[0] for d in dates if d[0]]
 
     programs = ['ПМ', 'ИВТ', 'ИТСС', 'ИБ']
-    stats = {}
+    stat = {}
 
     for prog in programs:
-        stats[prog] = {}
+        stat[prog] = {}
         for date in dates:
             count = Applicant.query.filter_by(program=prog, date=date).count()
             consent_count = Applicant.query.filter_by(program=prog, date=date, consent=True).count()
-            stats[prog][date] = {'total': count, 'consent': consent_count}
+            stat[prog][date] = {'total': count, 'consent': consent_count}
 
-    return render_template('index.html', stats=stats, dates=dates, programs=programs)
+    return render_template('index.html', stats=stat, dates=dates, programs=programs)
 
 
 # Загрузка CSV
@@ -188,7 +186,7 @@ def stats():
             all_apps = Applicant.query.filter_by(program=prog, date=date).all()
 
             # Только с согласием, отсортированные по баллам
-            consent_apps = [app for app in all_apps if app.consent]
+            consent_apps = [app_ for app_ in all_apps if app_.consent]
             consent_apps.sort(key=lambda x: x.total, reverse=True)
 
             # Расчет проходного балла
@@ -199,9 +197,9 @@ def stats():
 
             # Статистика по приоритетам
             priority_counts = {1: 0, 2: 0, 3: 0, 4: 0}
-            for app in all_apps:
-                if 1 <= app.priority <= 4:
-                    priority_counts[app.priority] += 1
+            for app_ in all_apps:
+                if 1 <= app_.priority <= 4:
+                    priority_counts[app_.priority] += 1
 
             stats_data[prog]['by_date'][date] = {
                 'total': len(all_apps),
