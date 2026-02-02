@@ -4,22 +4,18 @@ import pandas as pd
 import os
 # from datetime import datetime
 
-# Создаем приложение
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///admission.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
-# Инициализируем БД
 db = SQLAlchemy(app)
 
-# Создаем папки если их нет
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs('reports', exist_ok=True)
 
 
-# Определяем модель прямо в app.py
 class Applicant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     applicant_id = db.Column(db.Integer)
@@ -37,10 +33,8 @@ class Applicant(db.Model):
         return f'<Applicant {self.applicant_id} - {self.program}>'
 
 
-# Главная страница
 @app.route('/')
 def index():
-    # Получаем статистику
     dates = db.session.query(Applicant.date).distinct().all()
     dates = [d[0] for d in dates if d[0]]
 
@@ -57,7 +51,6 @@ def index():
     return render_template('index.html', stats=stats, dates=dates, programs=programs)
 
 
-# Загрузка CSV
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
     if request.method == 'POST':
@@ -69,20 +62,15 @@ def upload():
             return redirect(url_for('upload'))
 
         try:
-            # Сохраняем файл
             filename = f"{date}_{file.filename}"
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
 
-            # Читаем CSV
             df = pd.read_csv(filepath)
 
-            # Удаляем старые записи за эту дату
             Applicant.query.filter_by(date=date).delete()
 
-            # Добавляем новые
             for _, row in df.iterrows():
-                # Проверяем наличие необходимых колонок
                 if 'ID' in df.columns:
                     app_id = int(row['ID'])
                 else:
@@ -113,18 +101,14 @@ def upload():
     return render_template('upload.html')
 
 
-# Просмотр списков
 @app.route('/lists')
 def lists():
-    # Параметры фильтрации
     program = request.args.get('program', 'all')
     date = request.args.get('date', 'all')
     show_consent = request.args.get('consent', 'all')
 
-    # Базовый запрос
     query = Applicant.query
 
-    # Применяем фильтры
     if program != 'all':
         query = query.filter_by(program=program)
     if date != 'all':
@@ -134,7 +118,6 @@ def lists():
     elif show_consent == 'no':
         query = query.filter_by(consent=False)
 
-    # Сортировка
     sort_by = request.args.get('sort_by', 'total')
     order = request.args.get('order', 'desc')
 
@@ -148,7 +131,6 @@ def lists():
     else:
         applicants = query.all()
 
-    # Получаем уникальные значения для фильтров
     dates = [d[0] for d in db.session.query(Applicant.date).distinct().all() if d[0]]
     programs = [p[0] for p in db.session.query(Applicant.program).distinct().all() if p[0]]
 
@@ -161,10 +143,8 @@ def lists():
                            show_consent=show_consent)
 
 
-# Статистика
 @app.route('/stats')
 def stats():
-    # Места по программам
     seats = {
         'ПМ': 40,
         'ИВТ': 50,
@@ -184,20 +164,17 @@ def stats():
         }
 
         for date in dates:
-            # Все абитуриенты по программе и дате
+
             all_apps = Applicant.query.filter_by(program=prog, date=date).all()
 
-            # Только с согласием, отсортированные по баллам
             consent_apps = [app for app in all_apps if app.consent]
             consent_apps.sort(key=lambda x: x.total, reverse=True)
 
-            # Расчет проходного балла
             if len(consent_apps) >= seats[prog]:
                 passing_score = consent_apps[seats[prog] - 1].total
             else:
                 passing_score = 'НЕДОБОР'
 
-            # Статистика по приоритетам
             priority_counts = {1: 0, 2: 0, 3: 0, 4: 0}
             for app in all_apps:
                 if 1 <= app.priority <= 4:
@@ -216,7 +193,6 @@ def stats():
                            programs=programs)
 
 
-# Очистка БД
 @app.route('/clear')
 def clear_db():
     Applicant.query.delete()
@@ -225,9 +201,7 @@ def clear_db():
     return redirect(url_for('index'))
 
 
-# Запуск приложения
 if __name__ == '__main__':
-    # Создаем таблицы если их нет
     with app.app_context():
         db.create_all()
     app.run(debug=True, port=5000)
