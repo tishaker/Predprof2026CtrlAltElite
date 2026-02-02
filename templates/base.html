@@ -34,7 +34,6 @@
     </nav>
 
     <div class="container mt-4">
-        <!-- Сообщения -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -46,7 +45,6 @@
             {% endif %}
         {% endwith %}
 
-        <!-- Основной контент -->
         {% block content %}{% endblock %}
     </div>
 
