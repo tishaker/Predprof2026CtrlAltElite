@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 class="mb-4">Списки абитуриентов</h2>
+<h2 class="mb-4">📋 Конкурсные списки и визуализация</h2>
 
 <div class="card mb-4">
     <div class="card-body">
         <form method="GET" class="row g-3">
             <div class="col-md-3">
                 <label class="form-label">Программа:</label>
-                <select name="program" class="form-select">
+                <select name="program" class="form-select" id="program-select">
                     <option value="all">Все программы</option>
                     {% for prog in programs %}
                     <option value="{{ prog }}" {% if current_program == prog %}selected{% endif %}>{{ prog }}</option>
@@ -18,7 +18,7 @@
 
             <div class="col-md-3">
                 <label class="form-label">Дата:</label>
-                <select name="date" class="form-select">
+                <select name="date" class="form-select" id="date-select">
                     <option value="all">Все даты</option>
                     {% for d in dates %}
                     <option value="{{ d }}" {% if current_date == d %}selected{% endif %}>{{ d }}</option>
@@ -26,72 +26,618 @@
                 </select>
             </div>
 
-            <div class="col-md-3">
-                <label class="form-label">Согласие:</label>
-                <select name="consent" class="form-select">
-                    <option value="all">Все</option>
-                    <option value="yes" {% if show_consent == 'yes' %}selected{% endif %}>Только с согласием</option>
-                    <option value="no" {% if show_consent == 'no' %}selected{% endif %}>Без согласия</option>
+            <div class="col-md-2">
+                <label class="form-label">Сортировка:</label>
+                <select name="sort_by" class="form-select" id="sort-select">
+                    <option value="total" {% if request.args.get('sort_by') == 'total' %}selected{% endif %}>По баллам</option>
+                    <option value="id" {% if request.args.get('sort_by') == 'id' %}selected{% endif %}>По ID</option>
+                    <option value="priority" {% if request.args.get('sort_by') == 'priority' %}selected{% endif %}>По приоритету</option>
                 </select>
             </div>
 
-            <div class="col-md-3 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">Применить фильтры</button>
+            <div class="col-md-2">
+                <label class="form-label">Порядок:</label>
+                <select name="order" class="form-select" id="order-select">
+                    <option value="desc" {% if request.args.get('order') == 'desc' %}selected{% endif %}>По убыванию</option>
+                    <option value="asc" {% if request.args.get('order') == 'asc' %}selected{% endif %}>По возрастанию</option>
+                </select>
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Обновить</button>
             </div>
         </form>
     </div>
 </div>
 
-<div class="table-responsive">
-    <table class="table table-striped table-hover">
-        <thead class="table-dark">
-            <tr>
-                <th>ID</th>
-                <th>Программа</th>
-                <th>Дата</th>
-                <th>Приоритет</th>
-                <th>Согласие</th>
-                <th>Физика</th>
-                <th>Русский</th>
-                <th>Математика</th>
-                <th>Достижения</th>
-                <th>Сумма</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for app in applicants %}
-            <tr>
-                <td>{{ app.applicant_id }}</td>
-                <td>
-                    <span class="badge bg-primary">{{ app.program }}</span>
-                </td>
-                <td>{{ app.date }}</td>
-                <td>{{ app.priority }}</td>
-                <td>
-                    {% if app.consent %}
-                    <span class="badge bg-success">Да</span>
-                    {% else %}
-                    <span class="badge bg-secondary">Нет</span>
-                    {% endif %}
-                </td>
-                <td>{{ app.physics }}</td>
-                <td>{{ app.russian }}</td>
-                <td>{{ app.math }}</td>
-                <td>{{ app.achievements }}</td>
-                <td><strong>{{ app.total }}</strong></td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="10" class="text-center text-muted">
-                    Нет данных для отображения
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<!-- Карточка с проходными баллами -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">🎯 Проходные баллы на ОП</h5>
+            </div>
+            <div class="card-body">
+                <div class="row" id="passing-scores-container">
+                    <div class="col-12 text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                        <p class="mt-2">Загрузка данных о проходных баллах...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer text-muted">
+                <small>Проходной балл рассчитывается только для абитуриентов с согласием на зачисление</small>
+            </div>
+        </div>
+    </div>
 </div>
 
-<div class="mt-3 text-muted">
-    Показано: {{ applicants|length }} записей
+<!-- Визуализация каскада приоритетов -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="card-title mb-0">🔄 Каскад приоритетов абитуриентов</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <canvas id="cascadeChart" height="250"></canvas>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="list-group">
+                            <div class="list-group-item">
+                                <small class="text-muted">Всего абитуриентов с согласием</small>
+                                <h5 id="total-with-consent" class="mb-0">0</h5>
+                            </div>
+                            <div class="list-group-item">
+                                <small class="text-muted">Показывается абитуриентов</small>
+                                <h5 id="showing-cascade" class="mb-0">0</h5>
+                            </div>
+                            <div class="list-group-item">
+                                <small class="text-muted">Среднее количество приоритетов</small>
+                                <h5 id="avg-priorities" class="mb-0">0</h5>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="show-accepted" checked>
+                                <label class="form-check-label" for="show-accepted">
+                                    Показывать предполагаемое зачисление
+                                </label>
+                            </div>
+                            <small class="text-muted d-block mt-1">
+                                Зеленым выделяются приоритеты, которые могут пройти по баллам
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+
+<!-- График распределения баллов -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">📊 Распределение баллов по программам</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <canvas id="distributionChart" height="200"></canvas>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="list-group">
+                            <div class="list-group-item">
+                                <small class="text-muted">Общее количество</small>
+                                <h5 id="total-count" class="mb-0">0</h5>
+                            </div>
+                            <div class="list-group-item">
+                                <small class="text-muted">Абитуриентов с согласием</small>
+                                <h5 id="with-consent-count" class="mb-0">0</h5>
+                            </div>
+                            <div class="list-group-item">
+                                <small class="text-muted">Процент с согласием</small>
+                                <h5 id="consent-percent" class="mb-0">0%</h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Таблица конкурсных списков -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">📋 Конкурсный список</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th width="80">
+                            <a href="?sort_by=id&order={% if request.args.get('sort_by') == 'id' and request.args.get('order') == 'asc' %}desc{% else %}asc{% endif %}&program={{ current_program }}&date={{ current_date }}">
+                                ID
+                            </a>
+                        </th>
+                        <th>Программа</th>
+                        <th width="100">Дата</th>
+                        <th width="100">
+                            <a href="?sort_by=priority&order={% if request.args.get('sort_by') == 'priority' and request.args.get('order') == 'asc' %}desc{% else %}asc{% endif %}&program={{ current_program }}&date={{ current_date }}">
+                                Приоритет
+                            </a>
+                        </th>
+                        <th width="100">Согласие</th>
+                        <th width="100">Физика</th>
+                        <th width="100">Русский</th>
+                        <th width="100">Математика</th>
+                        <th width="120">Достижения</th>
+                        <th width="100">
+                            <a href="?sort_by=total&order={% if request.args.get('sort_by') == 'total' and request.args.get('order') == 'desc' %}asc{% else %}desc{% endif %}&program={{ current_program }}&date={{ current_date }}">
+                                Сумма
+                            </a>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for app in applicants %}
+                    <tr class="{% if app.consent %}table-success{% endif %}">
+                        <td>
+                            <span class="badge bg-secondary">{{ app.applicant_id }}</span>
+                        </td>
+                        <td>
+                            <span class="badge
+                                {% if app.program == 'ПМ' %}bg-primary
+                                {% elif app.program == 'ИВТ' %}bg-info
+                                {% elif app.program == 'ИТСС' %}bg-warning
+                                {% else %}bg-danger{% endif %}">
+                                {{ app.program }}
+                            </span>
+                        </td>
+                        <td>{{ app.date }}</td>
+                        <td>
+                            <span class="badge
+                                {% if app.priority == 1 %}bg-danger
+                                {% elif app.priority == 2 %}bg-warning
+                                {% elif app.priority == 3 %}bg-primary
+                                {% else %}bg-secondary{% endif %}">
+                                {{ app.priority }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if app.consent %}
+                            <span class="badge bg-success">✓ Да</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Нет</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ app.physics }}</td>
+                        <td>{{ app.russian }}</td>
+                        <td>{{ app.math }}</td>
+                        <td>{{ app.achievements }}</td>
+                        <td>
+                            <strong class="{% if app.consent %}text-success{% endif %}">
+                                {{ app.total }}
+                            </strong>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            Нет данных для отображения
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer">
+        <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted">Показано: {{ applicants|length }} записей</span>
+            <small class="text-muted">Обновлено: {{ now|default("сегодня") }}</small>
+        </div>
+    </div>
+</div>
+
+<!-- Добавление библиотек для графиков -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.0"></script>
+
+<style>
+/* Стили для графика */
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    margin-bottom: 20px;
+}
+
+.list-group-item {
+    border: none;
+    padding: 0.75rem 1.25rem;
+}
+
+.list-group-item small {
+    font-size: 0.8rem;
+}
+
+.table th a {
+    text-decoration: none;
+    color: white;
+}
+
+.table th a:hover {
+    text-decoration: underline;
+}
+
+.badge {
+    font-size: 0.8em;
+    padding: 0.4em 0.6em;
+}
+
+.passing-score-card {
+    border-left: 4px solid #0d6efd;
+    transition: all 0.3s ease;
+}
+
+.passing-score-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.passing-badge {
+    font-size: 1.2em;
+    padding: 0.5em 1em;
+}
+
+.cascade-bar {
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.cascade-bar:hover {
+    opacity: 0.8;
+}
+</style>
+
+<script>
+// Инициализация графиков
+let cascadeChart = null;
+let distributionChart = null;
+
+// Количество мест на программы
+const programSeats = {
+    'ПМ': 40,
+    'ИВТ': 50,
+    'ИТСС': 30,
+    'ИБ': 20
+};
+
+// Цвета для программ
+const programColors = {
+    'ПМ': 'rgba(13, 110, 253, 0.8)',
+    'ИВТ': 'rgba(13, 202, 240, 0.8)',
+    'ИТСС': 'rgba(255, 193, 7, 0.8)',
+    'ИБ': 'rgba(220, 53, 69, 0.8)'
+};
+
+// Загрузка данных о проходных баллах
+function loadPassingScores() {
+    const date = document.getElementById('date-select').value;
+    const url = `/passing_scores?date=${date}`;
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            updatePassingScores(data);
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки проходных баллов:', error);
+            document.getElementById('passing-scores-container').innerHTML =
+                '<div class="alert alert-danger">Ошибка загрузки данных</div>';
+        });
+}
+
+// Обновление отображения проходных баллов
+function updatePassingScores(data) {
+    const container = document.getElementById('passing-scores-container');
+    let html = '';
+
+    for (const [program, info] of Object.entries(data)) {
+        const passingScore = info.passing_score === 'НЕДОБОР' ?
+            '<span class="badge bg-warning passing-badge">НЕДОБОР</span>' :
+            `<span class="badge bg-danger passing-badge">${info.passing_score}</span>`;
+
+        html += `
+            <div class="col-md-3 mb-3">
+                <div class="card passing-score-card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">${program}</h5>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Мест:</span>
+                            <span class="badge bg-primary">${info.seats}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Подано заявлений:</span>
+                            <span class="badge bg-info">${info.total_applicants}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span>Проходной балл:</span>
+                            ${passingScore}
+                        </div>
+                        <div class="small text-muted">
+                            Приоритеты:
+                            ${[1,2,3,4].map(p =>
+                                `<span class="badge bg-secondary me-1">${p}: ${info.priorities[p].count}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+}
+
+// Загрузка данных каскада приоритетов
+function loadCascadeData() {
+    const program = document.getElementById('program-select').value;
+    const date = document.getElementById('date-select').value;
+    const url = `/priority_cascade?program=${program}&date=${date}`;
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            updateCascadeChart(data);
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки каскада приоритетов:', error);
+        });
+}
+
+// Обновление графика каскада приоритетов
+function updateCascadeChart(data) {
+    const ctx = document.getElementById('cascadeChart').getContext('2d');
+
+    // Удаляем старый график
+    if (cascadeChart) {
+        cascadeChart.destroy();
+    }
+
+    // Ограничиваем количество отображаемых абитуриентов для производительности
+    const maxApplicants = 20;
+    const cascadeData = data.cascade.slice(0, maxApplicants);
+
+    // Подготавливаем данные
+    const labels = cascadeData.map(d => `Аб. ${d.id}`);
+    const datasets = [];
+
+    // Создаем dataset для каждого приоритета
+    for (let priority = 1; priority <= 4; priority++) {
+        const scores = cascadeData.map(d => {
+            const priorityData = d.priorities.find(p => p.priority === priority);
+            return priorityData ? priorityData.score : null;
+        });
+
+        datasets.push({
+            label: `Приоритет ${priority}`,
+            data: scores,
+            backgroundColor: priority === 1 ? 'rgba(220, 53, 69, 0.7)' :
+                          priority === 2 ? 'rgba(255, 193, 7, 0.7)' :
+                          priority === 3 ? 'rgba(13, 110, 253, 0.7)' :
+                                          'rgba(108, 117, 125, 0.7)',
+            borderColor: priority === 1 ? 'rgba(220, 53, 69, 1)' :
+                         priority === 2 ? 'rgba(255, 193, 7, 1)' :
+                         priority === 3 ? 'rgba(13, 110, 253, 1)' :
+                                         'rgba(108, 117, 125, 1)',
+            borderWidth: 1,
+            hidden: priority > 2 // По умолчанию показываем только 1-2 приоритеты
+        });
+    }
+
+    // Создаем график
+    cascadeChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    stacked: true,
+                    title: {
+                        display: true,
+                        text: 'Абитуриенты'
+                    }
+                },
+                y: {
+                    stacked: true,
+                    title: {
+                        display: true,
+                        text: 'Баллы'
+                    },
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y} баллов`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Обновляем статистику
+    document.getElementById('total-with-consent').textContent = data.total_applicants;
+    document.getElementById('showing-cascade').textContent = cascadeData.length;
+
+    // Рассчитываем среднее количество приоритетов
+    const avgPriorities = cascadeData.length > 0 ?
+        (cascadeData.reduce((sum, d) => sum + d.priorities.length, 0) / cascadeData.length).toFixed(1) : 0;
+    document.getElementById('avg-priorities').textContent = avgPriorities;
+}
+
+// Загрузка данных распределения
+function loadDistributionData() {
+    const program = document.getElementById('program-select').value;
+    const date = document.getElementById('date-select').value;
+    const url = `/chart_data?program=${program}&date=${date}&consent=all`;
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            updateDistributionChart(data);
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки распределения:', error);
+        });
+}
+
+// Обновление графика распределения
+function updateDistributionChart(data) {
+    const ctx = document.getElementById('distributionChart').getContext('2d');
+
+    // Удаляем старый график
+    if (distributionChart) {
+        distributionChart.destroy();
+    }
+
+    // Создаем график
+    distributionChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.labels,
+            datasets: [{
+                label: 'Количество абитуриентов',
+                data: data.data,
+                backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                borderColor: 'rgba(40, 167, 69, 1)',
+                borderWidth: 1,
+                borderRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Количество'
+                    },
+                    ticks: {
+                        stepSize: 1
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Диапазон баллов'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+
+    // Обновляем статистику
+    document.getElementById('total-count').textContent = data.count;
+
+    // Загружаем данные о согласиях отдельно
+    const consentUrl = `/chart_data?program=${program}&date=${date}&consent=yes`;
+    fetch(consentUrl)
+        .then(response => response.json())
+        .then(consentData => {
+            document.getElementById('with-consent-count').textContent = consentData.count;
+            const percent = data.count > 0 ? Math.round((consentData.count / data.count) * 100) : 0;
+            document.getElementById('consent-percent').textContent = percent + '%';
+        });
+}
+
+// Инициализация всех графиков
+function initializeCharts() {
+    console.log('Инициализация графиков...');
+    const startTime = Date.now();
+
+    // Загружаем все данные параллельно
+    Promise.all([
+        loadPassingScores(),
+        loadCascadeData(),
+        loadDistributionData()
+    ]).then(() => {
+        const endTime = Date.now();
+        const loadTime = endTime - startTime;
+        console.log(`Графики загружены за ${loadTime}ms`);
+
+        // Проверка времени загрузки
+        if (loadTime > 3000) {
+            console.warn(`Внимание: время загрузки (${loadTime}ms) превышает 3 секунды`);
+        }
+    }).catch(error => {
+        console.error('Ошибка инициализации графиков:', error);
+    });
+}
+
+// Обработчики событий
+document.addEventListener('DOMContentLoaded', function() {
+    // Инициализация при загрузке
+    initializeCharts();
+
+    // Обновление при изменении фильтров
+    document.getElementById('program-select').addEventListener('change', function() {
+        initializeCharts();
+    });
+
+    document.getElementById('date-select').addEventListener('change', function() {
+        initializeCharts();
+    });
+
+    // Обновление каждые 30 секунд
+    setInterval(initializeCharts, 30000);
+
+    // Обработчик чекбокса
+    document.getElementById('show-accepted').addEventListener('change', function() {
+        if (cascadeChart) {
+            // Здесь можно добавить логику подсветки зачисленных
+        }
+    });
+});
+
+// Функция для проверки времени выполнения
+function measurePerformance(fn) {
+    const start = performance.now();
+    const result = fn();
+    const end = performance.now();
+    return {
+        result,
+        time: end - start
+    };
+}
+</script>
+
 {% endblock %}

@@ -144,7 +144,198 @@ def lists():
                            programs=programs,
                            current_program=program,
                            current_date=date,
-                           show_consent=show_consent)
+                           show_consent=show_consent,
+                           now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
+
+
+@app.route('/chart_data')
+def chart_data():
+    """Возвращает данные для построения графика распределения баллов"""
+    program = request.args.get('program', 'all')
+    date = request.args.get('date', 'all')
+    show_consent = request.args.get('consent', 'all')
+
+    query = Applicant.query
+
+    if program != 'all':
+        query = query.filter_by(program=program)
+    if date != 'all':
+        query = query.filter_by(date=date)
+    if show_consent == 'yes':
+        query = query.filter_by(consent=True)
+    elif show_consent == 'no':
+        query = query.filter_by(consent=False)
+
+    applicants = query.all()
+
+    # Собираем баллы для гистограммы
+    scores = [app.total for app in applicants]
+
+    if not scores:
+        return {
+            'labels': [],
+            'data': [],
+            'average': 0,
+            'max_score': 0,
+            'min_score': 0,
+            'count': 0
+        }
+
+    # Создаем интервалы для гистограммы (оптимизировано для скорости)
+    min_score = min(scores)
+    max_score = max(scores)
+    count = len(scores)
+
+    # Быстрый расчет интервалов
+    if count < 2:
+        return {
+            'labels': [f"{int(min_score)}"],
+            'data': [count],
+            'average': min_score,
+            'max_score': max_score,
+            'min_score': min_score,
+            'count': count
+        }
+
+    # Используем фиксированное количество интервалов для скорости
+    num_bins = min(10, max(5, count // 10))
+    bin_width = (max_score - min_score) / num_bins
+
+    if bin_width == 0:
+        return {
+            'labels': [f"{int(min_score)}"],
+            'data': [count],
+            'average': min_score,
+            'max_score': max_score,
+            'min_score': min_score,
+            'count': count
+        }
+
+    # Быстрый подсчет
+    bins = []
+    data = []
+
+    for i in range(num_bins):
+        bin_start = min_score + i * bin_width
+        bin_end = bin_start + bin_width if i < num_bins - 1 else max_score + 0.1
+
+        # Быстрый подсчет
+        count_in_bin = sum(1 for score in scores if bin_start <= score < bin_end)
+
+        if count_in_bin > 0 or i == 0 or i == num_bins - 1:
+            label = f"{int(bin_start)}-{int(bin_end)}"
+            bins.append(label)
+            data.append(count_in_bin)
+
+    return {
+        'labels': bins,
+        'data': data,
+        'average': round(sum(scores) / count, 1),
+        'max_score': max_score,
+        'min_score': min_score,
+        'count': count
+    }
+
+@app.route('/passing_scores')
+def passing_scores():
+    """Расчет проходных баллов на каждую программу"""
+    date = request.args.get('date', 'all')
+
+    # Количество мест на каждую программу
+    seats = {
+        'ПМ': 40,
+        'ИВТ': 50,
+        'ИТСС': 30,
+        'ИБ': 20
+    }
+
+    programs = ['ПМ', 'ИВТ', 'ИТСС', 'ИБ']
+    passing_data = {}
+
+    for prog in programs:
+        query = Applicant.query.filter_by(program=prog, consent=True)
+
+        if date != 'all':
+            query = query.filter_by(date=date)
+
+        # Получаем всех абитуриентов с согласием, отсортированных по баллам
+        applicants = query.order_by(Applicant.total.desc()).all()
+
+        # Рассчитываем проходной балл
+        if len(applicants) >= seats[prog]:
+            passing_score = applicants[seats[prog] - 1].total
+        else:
+            passing_score = 'НЕДОБОР'
+
+        # Собираем статистику по приоритетам
+        priorities = {1: [], 2: [], 3: [], 4: []}
+        for app in applicants:
+            if 1 <= app.priority <= 4:
+                priorities[app.priority].append(app)
+
+        passing_data[prog] = {
+            'seats': seats[prog],
+            'total_applicants': len(applicants),
+            'passing_score': passing_score,
+            'priorities': {
+                p: {
+                    'count': len(priorities[p]),
+                    'scores': [app.total for app in priorities[p][:5]]  # Топ-5 баллов
+                }
+                for p in range(1, 5)
+            }
+        }
+
+    return passing_data
+
+
+@app.route('/priority_cascade')
+def priority_cascade():
+    """Данные для визуализации каскада приоритетов"""
+    program = request.args.get('program', 'all')
+    date = request.args.get('date', 'all')
+
+    query = Applicant.query.filter_by(consent=True)
+
+    if program != 'all':
+        query = query.filter_by(program=program)
+    if date != 'all':
+        query = query.filter_by(date=date)
+
+    applicants = query.all()
+
+    # Группируем по ID абитуриента для каскада приоритетов
+    applicants_by_id = {}
+    for app in applicants:
+        if app.applicant_id not in applicants_by_id:
+            applicants_by_id[app.applicant_id] = []
+        applicants_by_id[app.applicant_id].append(app)
+
+    # Формируем данные для каскада (ограничиваем для производительности)
+    cascade_data = []
+    for app_id, apps in list(applicants_by_id.items())[:50]:  # Ограничим 50 абитуриентами
+        # Сортируем по приоритету
+        apps.sort(key=lambda x: x.priority)
+
+        cascade_data.append({
+            'id': app_id,
+            'priorities': [
+                {
+                    'program': app.program,
+                    'priority': app.priority,
+                    'score': app.total,
+                    'accepted': False
+                }
+                for app in apps
+            ]
+        })
+
+    return {
+        'cascade': cascade_data,
+        'total_applicants': len(applicants_by_id)
+    }
+
+
 
 
 @app.route('/stats')
@@ -229,8 +420,7 @@ def generate_report():
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    # Просто используем стандартные шрифты без кириллицы
-    # Будем использовать заглавные латинские буквы для заголовков
+
 
     # Заголовок отчета
     c.setFont("Helvetica-Bold", 16)
