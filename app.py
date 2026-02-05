@@ -340,54 +340,114 @@ def priority_cascade():
 
 @app.route('/stats')
 def stats():
-    seats = {
-        'ПМ': 40,
-        'ИВТ': 50,
-        'ИТСС': 30,
-        'ИБ': 20
-    }
-
+    seats = {'ПМ': 40, 'ИВТ': 50, 'ИТСС': 30, 'ИБ': 20}
     dates = ['01.08', '02.08', '03.08', '04.08']
     programs = ['ПМ', 'ИВТ', 'ИТСС', 'ИБ']
+
+    all_applicants = Applicant.query.all()
 
     stats_data = {}
 
     for prog in programs:
-        stats_data[prog] = {
-            'seats': seats[prog],
-            'by_date': {}
-        }
+        stats_data[prog] = {'seats': seats[prog], 'by_date': {}}
 
-        for date in dates:
+    for date in dates:
+        all_apps_with_consent = [a for a in all_applicants if a.date == date and a.consent]
 
-            all_apps = Applicant.query.filter_by(program=prog, date=date).all()
+        if not all_apps_with_consent:
+            for prog in programs:
+                stats_data[prog]['by_date'][date] = {
+                    'total': 0,
+                    'total_consent': 0,
+                    'enrolled': 0,
+                    'consent_not_enrolled': 0,
+                    'passing_score': 'НЕТ ДАННЫХ',
+                    'priority_counts': {1: 0, 2: 0, 3: 0, 4: 0},
+                    'enrolled_by_priority': {1: 0, 2: 0, 3: 0, 4: 0},
+                    'enrolled_list': []
+                }
+            continue
 
-            # Только с согласием, отсортированные по баллам
-            consent_apps = [app_ for app_ in all_apps if app_.consent]
-            consent_apps.sort(key=lambda x: x.total, reverse=True)
+        applicants_by_id = {}
+        for app in all_apps_with_consent:
+            if app.applicant_id not in applicants_by_id:
+                applicants_by_id[app.applicant_id] = []
+            applicants_by_id[app.applicant_id].append(app)
 
-            if len(consent_apps) >= seats[prog]:
-                passing_score = consent_apps[seats[prog] - 1].total
+        for app_id, apps in applicants_by_id.items():
+            apps.sort(key=lambda x: x.priority)
+
+        sorted_applicant_ids = sorted(
+            applicants_by_id.keys(),
+            key=lambda aid: (
+                max(app.total for app in applicants_by_id[aid]),
+                -aid
+            ),
+            reverse=True
+        )
+
+        enrolled = {prog: [] for prog in programs}
+
+        already_enrolled = set()
+
+        for app_id in sorted_applicant_ids:
+            apps = applicants_by_id[app_id]
+
+            enrolled_successfully = False
+            for app in apps:
+                program = app.program
+                if len(enrolled[program]) < seats[program]:
+                    enrolled[program].append(app)
+                    already_enrolled.add(app_id)
+                    enrolled_successfully = True
+                    break
+
+
+
+        for prog in programs:
+            enrolled[prog].sort(key=lambda x: x.total, reverse=True)
+
+        for prog in programs:
+            if len(enrolled[prog]) >= seats[prog]:
+                passing_score = enrolled[prog][seats[prog] - 1].total
             else:
                 passing_score = 'НЕДОБОР'
-
+            all_apps_prog = [a for a in all_applicants if a.program == prog and a.date == date]
             priority_counts = {1: 0, 2: 0, 3: 0, 4: 0}
-            for app_ in all_apps:
-                if 1 <= app_.priority <= 4:
-                    priority_counts[app_.priority] += 1
+            for app in all_apps_prog:
+                if 1 <= app.priority <= 4:
+                    priority_counts[app.priority] += 1
+
+            enrolled_by_priority = {1: 0, 2: 0, 3: 0, 4: 0}
+            for app in enrolled[prog]:
+                if 1 <= app.priority <= 4:
+                    enrolled_by_priority[app.priority] += 1
+
+            all_enrolled_ids = set()
+            for apps_list in enrolled.values():
+                for app in apps_list:
+                    all_enrolled_ids.add(app.applicant_id)
+
+            consent_not_enrolled = 0
+            for app in all_apps_prog:
+                if app.consent and app.applicant_id not in already_enrolled:
+                    consent_not_enrolled += 1
 
             stats_data[prog]['by_date'][date] = {
-                'total': len(all_apps),
-                'consent': len(consent_apps),
+                'total': len(all_apps_prog),
+                'total_consent': len([a for a in all_apps_prog if a.consent]),
+                'enrolled': len(enrolled[prog]),
+                'consent_not_enrolled': consent_not_enrolled,
                 'passing_score': passing_score,
-                'priority_counts': priority_counts
+                'priority_counts': priority_counts,
+                'enrolled_by_priority': enrolled_by_priority,
+                'enrolled_list': enrolled[prog]
             }
 
     return render_template('stats.html',
                            stats=stats_data,
                            dates=dates,
                            programs=programs)
-
 
 @app.route('/clear')
 def clear_db():
