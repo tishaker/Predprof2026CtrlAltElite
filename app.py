@@ -5,66 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import pandas as pd
 import os
 import io
-from datetime import datetime
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-
-
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-here'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///admission.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = 'uploads'
-
-db = SQLAlchemy(app)
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs('reports', exist_ok=True)
-
-
-# Модель пользователя
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(200), nullable=False)
-    role = db.Column(db.String(20), default='user')  # 'admin' или 'user'
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-class Applicant(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    applicant_id = db.Column(db.Integer)
-    consent = db.Column(db.Boolean)
-    priority = db.Column(db.Integer)
-    physics = db.Column(db.Integer)
-    russian = db.Column(db.Integer)
-    math = db.Column(db.Integer)
-    achievements = db.Column(db.Integer)
-    total = db.Column(db.Integer)
-    program = db.Column(db.String(20))
-    date = db.Column(db.String(20))
-
-    def __repr__(self):
-        return f'<Applicant {self.applicant_id} - {self.program}>'
-
-> Елизавета:
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-import pandas as pd
-import os
-import io
-from datetime import datetime
+from datetime import datetime, timezone
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
@@ -90,7 +31,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(20), default='user')  # 'admin' или 'user'
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -178,8 +119,6 @@ def register():
 
 
 @app.route('/logout')
-
-> Елизавета:
 @login_required
 def logout():
     logout_user()
@@ -221,96 +160,6 @@ def require_login():
     if request.endpoint and not current_user.is_authenticated:
         if request.endpoint not in allowed_routes:
             return redirect(url_for('login', next=request.url))
-
-
-@app.route('/')
-@login_required
-def index():
-    dates = db.session.query(Applicant.date).distinct().all()
-    dates = [d[0] for d in dates if d[0]]
-
-    programs = ['ПМ', 'ИВТ', 'ИТСС', 'ИБ']
-    stat = {}
-
-    for prog in programs:
-        stat[prog] = {}
-        for date in dates:
-            count = Applicant.query.filter_by(program=prog, date=date).count()
-            consent_count = Applicant.query.filter_by(program=prog, date=date, consent=True).count()
-            stat[prog][date] = {'total': count, 'consent': consent_count}
-
-    return render_template('index.html', stats=stat, dates=dates, programs=programs)
-
-
-@app.route('/upload', methods=['GET', 'POST'])
-@login_required
-def upload():
-    if request.method == 'POST':
-        file = request.files.get('csv_file')
-        date = request.form.get('date')
-
-        if not file or not date:
-            flash('Выберите файл и дату', 'danger')
-            return redirect(url_for('upload'))
-
-        try:
-            filename = f"{date}_{file.filename}"
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-
-            df = pd.read_csv(filepath)
-
-            Applicant.query.filter_by(date=date).delete()
-
-            for _, row in df.iterrows():
-                if 'ID' in df.columns:
-                    app_id = int(row['ID'])
-                else:
-                    continue
-
-                applicant = Applicant(
-                    applicant_id=app_id,
-                    consent=bool(row.get('Согласие', False)),
-                    priority=int(row.get('Приоритет', 1)),
-                    physics=int(row.get('Физика', 0)),
-                    russian=int(row.get('Русский', 0)),
-                    math=int(row.get('Математика', 0)),
-                    achievements=int(row.get('Достижения', 0)),
-                    total=int(row.get('Сумма', 0)),
-                    program=str(row.get('Программа', 'ПМ')),
-                    date=date
-                )
-                db.session.add(applicant)
-
-            db.session.commit()
-            flash(f'Данные за {date} успешно загружены!', 'success')
-
-        except Exception as e:
-            flash(f'Ошибка: {str(e)}', 'danger')
-
-        return redirect(url_for('index'))
-
-    return render_template('upload.html')
-
-
-@app.route('/lists')
-@login_required
-def lists():
-    program = request.args.get('program', 'all')
-    date = request.args.get('date', 'all')
-    show_consent = request.args.get('consent', 'all')
-
-    query = Applicant.query
-
-    if program != 'all':
-        query = query.filter_by(program=program)
-    if date != 'all':
-        query = query.filter_by(date=date)
-    if show_consent == 'yes':
-        query = query.filter_by(consent=True)
-    elif show_consent == 'no':
-        query = query.
-
 
 
 @app.route('/')
@@ -516,6 +365,7 @@ def chart_data():
         'count': count
     }
 
+
 @app.route('/passing_scores')
 @login_required
 def passing_scores():
@@ -618,8 +468,6 @@ def priority_cascade():
     }
 
 
-
-
 @app.route('/stats')
 @login_required
 def stats():
@@ -670,7 +518,6 @@ def stats():
         )
 
         enrolled = {prog: [] for prog in programs}
-
         already_enrolled = set()
 
         for app_id in sorted_applicant_ids:
@@ -685,8 +532,6 @@ def stats():
                     enrolled_successfully = True
                     break
 
-
-
         for prog in programs:
             enrolled[prog].sort(key=lambda x: x.total, reverse=True)
 
@@ -695,6 +540,7 @@ def stats():
                 passing_score = enrolled[prog][seats[prog] - 1].total
             else:
                 passing_score = 'НЕДОБОР'
+
             all_apps_prog = [a for a in all_applicants if a.program == prog and a.date == date]
             priority_counts = {1: 0, 2: 0, 3: 0, 4: 0}
             for app in all_apps_prog:
@@ -732,6 +578,7 @@ def stats():
                            dates=dates,
                            programs=programs)
 
+
 @app.route('/clear')
 @login_required
 def clear_db():
@@ -765,8 +612,6 @@ def generate_report():
     # Создаем PDF напрямую через canvas
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
-
-
 
     # Заголовок отчета
     c.setFont("Helvetica-Bold", 16)
@@ -848,6 +693,7 @@ def generate_report():
         mimetype='application/pdf'
     )
 
+
 # Функция для создания первого пользователя (администратора)
 def create_admin_user():
     if not User.query.filter_by(username='admin').first():
@@ -856,6 +702,7 @@ def create_admin_user():
         db.session.add(admin)
         db.session.commit()
         print("Admin user created: username='admin', password='admin123'")
+
 
 if __name__ == '__main__':
     with app.app_context():
