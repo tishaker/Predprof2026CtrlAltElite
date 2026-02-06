@@ -199,7 +199,7 @@ def upload():
 
             df = pd.read_csv(filepath)
 
-            Applicant.query.filter_by(date=date).delete()
+            # Applicant.query.filter_by(date=date).delete()
 
             for _, row in df.iterrows():
                 if 'ID' in df.columns:
@@ -279,7 +279,20 @@ def lists():
 @app.route('/chart_data')
 @login_required
 def chart_data():
-    """Возвращает данные для построения графика распределения баллов"""
+    program = request.args.get('program', 'all')
+    date = request.args.get('date', 'all')
+    show_consent = request.args.get('consent', 'all')
+
+    query = Applicant.query
+
+    if program != 'all':
+        query = query.filter_by(program=program)
+    if date != 'all':
+        query = query.filter_by(date=date)
+    if show_consent == 'yes':
+        query = query.filter_by(consent=True)
+    elif show_consent == 'no':
+        query = query.filter_by(consent=False)
 
     applicants = Applicant.query.all()
 
@@ -683,6 +696,7 @@ def create_admin_user():
         db.session.add(admin)
         db.session.commit()
         print("Admin user created: username='admin', password='admin123'")
+
 
 
 if __name__ == '__main__':

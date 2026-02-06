@@ -30,16 +30,17 @@ class Applicant:
         self.applications[program_id] = priority
 
     def to_csv(self, program_id):
+        program_names = {1: "ПМ", 2: "ИВТ", 3: "ИТСС", 4: "ИБ"}
         return {
-            "applicant_id": self.id,
-            "program_id": program_id,
-            "priority": self.applications.get(program_id, 1),
-            "physics_ict_score": self.physics,
-            "russian_score": self.russian,
-            "math_score": self.math,
-            "achievement_score": self.achievement,
-            "total_score": self.total,
-            "has_cons": 1 if self.has_cons else 0
+            "ID": self.id,
+            "Программа": program_names[program_id],
+            "Приоритет": self.applications.get(program_id, 1),
+            "Физика": self.physics,
+            "Русский": self.russian,
+            "Математика": self.math,
+            "Достижения": self.achievement,
+            "Сумма": self.total,
+            "Согласие": 1 if self.has_cons else 0
         }
 def save_to_csv(program_id, day_name, applicants):
     filename = f"data_{day_name}_program{program_id}.csv"
