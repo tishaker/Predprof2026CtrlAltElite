@@ -1,23 +1,43 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 import pandas as pd
 import os
 import io
-from datetime import datetime
+from datetime import datetime, timezone
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-here'
+app.config['SECRET_KEY'] = 'your-secret-key-here-change-this-in-production'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///admission.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
 db = SQLAlchemy(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs('reports', exist_ok=True)
+
+
+# Модель пользователя
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
+    role = db.Column(db.String(20), default='user')  # 'admin' или 'user'
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
 
 class Applicant(db.Model):
@@ -37,7 +57,113 @@ class Applicant(db.Model):
         return f'<Applicant {self.applicant_id} - {self.program}>'
 
 
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+
+        user = User.query.filter_by(username=username).first()
+
+        if user and user.check_password(password):
+            login_user(user)
+            flash('Вы успешно вошли в систему!', 'success')
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('index'))
+        else:
+            flash('Неверное имя пользователя или пароль', 'danger')
+
+    return render_template('login.html')
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if password != confirm_password:
+            flash('Пароли не совпадают', 'danger')
+            return redirect(url_for('register'))
+
+        if User.query.filter_by(username=username).first():
+            flash('Имя пользователя уже занято', 'danger')
+            return redirect(url_for('register'))
+
+        if User.query.filter_by(email=email).first():
+            flash('Email уже зарегистрирован', 'danger')
+            return redirect(url_for('register'))
+
+        user = User(username=username, email=email)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        flash('Регистрация успешна! Теперь вы можете войти.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('register.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Вы вышли из системы', 'info')
+    return redirect(url_for('index'))
+
+
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html', user=current_user)
+
+
+@app.route('/change_password', methods=['POST'])
+@login_required
+def change_password():
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+
+    if not current_user.check_password(current_password):
+        flash('Текущий пароль неверен', 'danger')
+        return redirect(url_for('profile'))
+
+    if new_password != confirm_password:
+        flash('Новые пароли не совпадают', 'danger')
+        return redirect(url_for('profile'))
+
+    current_user.set_password(new_password)
+    db.session.commit()
+    flash('Пароль успешно изменен', 'success')
+    return redirect(url_for('profile'))
+
+
+# Добавляем защиту для всех маршрутов, требующих авторизации
+@app.before_request
+def require_login():
+    allowed_routes = ['login', 'register', 'static']
+    if request.endpoint and not current_user.is_authenticated:
+        if request.endpoint not in allowed_routes:
+            return redirect(url_for('login', next=request.url))
+
+
 @app.route('/')
+@login_required
 def index():
     dates = db.session.query(Applicant.date).distinct().all()
     dates = [d[0] for d in dates if d[0]]
@@ -56,6 +182,7 @@ def index():
 
 
 @app.route('/upload', methods=['GET', 'POST'])
+@login_required
 def upload():
     if request.method == 'POST':
         file = request.files.get('csv_file')
@@ -106,6 +233,7 @@ def upload():
 
 
 @app.route('/lists')
+@login_required
 def lists():
     program = request.args.get('program', 'all')
     date = request.args.get('date', 'all')
@@ -149,6 +277,7 @@ def lists():
 
 
 @app.route('/chart_data')
+@login_required
 def chart_data():
     """Возвращает данные для построения графика распределения баллов"""
     program = request.args.get('program', 'all')
@@ -236,7 +365,9 @@ def chart_data():
         'count': count
     }
 
+
 @app.route('/passing_scores')
+@login_required
 def passing_scores():
     """Расчет проходных баллов на каждую программу"""
     date = request.args.get('date', 'all')
@@ -290,6 +421,7 @@ def passing_scores():
 
 
 @app.route('/priority_cascade')
+@login_required
 def priority_cascade():
     """Данные для визуализации каскада приоритетов"""
     program = request.args.get('program', 'all')
@@ -336,51 +468,109 @@ def priority_cascade():
     }
 
 
-
-
 @app.route('/stats')
+@login_required
 def stats():
-    seats = {
-        'ПМ': 40,
-        'ИВТ': 50,
-        'ИТСС': 30,
-        'ИБ': 20
-    }
-
+    seats = {'ПМ': 40, 'ИВТ': 50, 'ИТСС': 30, 'ИБ': 20}
     dates = ['01.08', '02.08', '03.08', '04.08']
     programs = ['ПМ', 'ИВТ', 'ИТСС', 'ИБ']
+
+    all_applicants = Applicant.query.all()
 
     stats_data = {}
 
     for prog in programs:
-        stats_data[prog] = {
-            'seats': seats[prog],
-            'by_date': {}
-        }
+        stats_data[prog] = {'seats': seats[prog], 'by_date': {}}
 
-        for date in dates:
+    for date in dates:
+        all_apps_with_consent = [a for a in all_applicants if a.date == date and a.consent]
 
-            all_apps = Applicant.query.filter_by(program=prog, date=date).all()
+        if not all_apps_with_consent:
+            for prog in programs:
+                stats_data[prog]['by_date'][date] = {
+                    'total': 0,
+                    'total_consent': 0,
+                    'enrolled': 0,
+                    'consent_not_enrolled': 0,
+                    'passing_score': 'НЕТ ДАННЫХ',
+                    'priority_counts': {1: 0, 2: 0, 3: 0, 4: 0},
+                    'enrolled_by_priority': {1: 0, 2: 0, 3: 0, 4: 0},
+                    'enrolled_list': []
+                }
+            continue
 
-            # Только с согласием, отсортированные по баллам
-            consent_apps = [app_ for app_ in all_apps if app_.consent]
-            consent_apps.sort(key=lambda x: x.total, reverse=True)
+        applicants_by_id = {}
+        for app in all_apps_with_consent:
+            if app.applicant_id not in applicants_by_id:
+                applicants_by_id[app.applicant_id] = []
+            applicants_by_id[app.applicant_id].append(app)
 
-            if len(consent_apps) >= seats[prog]:
-                passing_score = consent_apps[seats[prog] - 1].total
+        for app_id, apps in applicants_by_id.items():
+            apps.sort(key=lambda x: x.priority)
+
+        sorted_applicant_ids = sorted(
+            applicants_by_id.keys(),
+            key=lambda aid: (
+                max(app.total for app in applicants_by_id[aid]),
+                -aid
+            ),
+            reverse=True
+        )
+
+        enrolled = {prog: [] for prog in programs}
+        already_enrolled = set()
+
+        for app_id in sorted_applicant_ids:
+            apps = applicants_by_id[app_id]
+
+            enrolled_successfully = False
+            for app in apps:
+                program = app.program
+                if len(enrolled[program]) < seats[program]:
+                    enrolled[program].append(app)
+                    already_enrolled.add(app_id)
+                    enrolled_successfully = True
+                    break
+
+        for prog in programs:
+            enrolled[prog].sort(key=lambda x: x.total, reverse=True)
+
+        for prog in programs:
+            if len(enrolled[prog]) >= seats[prog]:
+                passing_score = enrolled[prog][seats[prog] - 1].total
             else:
                 passing_score = 'НЕДОБОР'
 
+            all_apps_prog = [a for a in all_applicants if a.program == prog and a.date == date]
             priority_counts = {1: 0, 2: 0, 3: 0, 4: 0}
-            for app_ in all_apps:
-                if 1 <= app_.priority <= 4:
-                    priority_counts[app_.priority] += 1
+            for app in all_apps_prog:
+                if 1 <= app.priority <= 4:
+                    priority_counts[app.priority] += 1
+
+            enrolled_by_priority = {1: 0, 2: 0, 3: 0, 4: 0}
+            for app in enrolled[prog]:
+                if 1 <= app.priority <= 4:
+                    enrolled_by_priority[app.priority] += 1
+
+            all_enrolled_ids = set()
+            for apps_list in enrolled.values():
+                for app in apps_list:
+                    all_enrolled_ids.add(app.applicant_id)
+
+            consent_not_enrolled = 0
+            for app in all_apps_prog:
+                if app.consent and app.applicant_id not in already_enrolled:
+                    consent_not_enrolled += 1
 
             stats_data[prog]['by_date'][date] = {
-                'total': len(all_apps),
-                'consent': len(consent_apps),
+                'total': len(all_apps_prog),
+                'total_consent': len([a for a in all_apps_prog if a.consent]),
+                'enrolled': len(enrolled[prog]),
+                'consent_not_enrolled': consent_not_enrolled,
                 'passing_score': passing_score,
-                'priority_counts': priority_counts
+                'priority_counts': priority_counts,
+                'enrolled_by_priority': enrolled_by_priority,
+                'enrolled_list': enrolled[prog]
             }
 
     return render_template('stats.html',
@@ -390,6 +580,7 @@ def stats():
 
 
 @app.route('/clear')
+@login_required
 def clear_db():
     Applicant.query.delete()
     db.session.commit()
@@ -398,6 +589,7 @@ def clear_db():
 
 
 @app.route('/reports')
+@login_required
 def reports_page():
     """Страница выбора отчетов"""
     dates = db.session.query(Applicant.date).distinct().all()
@@ -407,6 +599,7 @@ def reports_page():
 
 
 @app.route('/generate_report', methods=['POST'])
+@login_required
 def generate_report():
     """Генерация PDF отчета - УПРОЩЕННЫЙ ВАРИАНТ"""
     report_type = request.form.get('report_type')
@@ -419,8 +612,6 @@ def generate_report():
     # Создаем PDF напрямую через canvas
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
-
-
 
     # Заголовок отчета
     c.setFont("Helvetica-Bold", 16)
@@ -502,7 +693,19 @@ def generate_report():
         mimetype='application/pdf'
     )
 
+
+# Функция для создания первого пользователя (администратора)
+def create_admin_user():
+    if not User.query.filter_by(username='admin').first():
+        admin = User(username='admin', email='admin@example.com', role='admin')
+        admin.set_password('admin123')  # Сменить в продакшене!
+        db.session.add(admin)
+        db.session.commit()
+        print("Admin user created: username='admin', password='admin123'")
+
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        create_admin_user()
     app.run(debug=True, port=5000)

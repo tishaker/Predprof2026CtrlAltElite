@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">👤 Профиль пользователя</h3>
+                </div>
+                <div class="card-body">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5>Информация о пользователе</h5>
+                            <table class="table">
+                                <tr>
+                                    <th>Имя пользователя:</th>
+                                    <td>{{ user.username }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Email:</th>
+                                    <td>{{ user.email }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Роль:</th>
+                                    <td>
+                                        {% if user.role == 'admin' %}
+                                            <span class="badge bg-danger">Администратор</span>
+                                        {% else %}
+                                            <span class="badge bg-primary">Пользователь</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Дата регистрации:</th>
+                                    <td>{{ user.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">🔐 Смена пароля</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('change_password') }}">
+                                <div class="mb-3">
+                                    <label for="current_password" class="form-label">Текущий пароль</label>
+                                    <input type="password" class="form-control" id="current_password" name="current_password" required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="new_password" class="form-label">Новый пароль</label>
+                                    <input type="password" class="form-control" id="new_password" name="new_password" required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="confirm_password" class="form-label">Подтвердите новый пароль</label>
+                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary">Сменить пароль</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('index') }}" class="btn btn-secondary">На главную</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
