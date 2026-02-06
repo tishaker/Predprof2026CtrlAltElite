@@ -160,7 +160,7 @@ def require_login():
     if request.endpoint and not current_user.is_authenticated:
         if request.endpoint not in allowed_routes:
             return redirect(url_for('login', next=request.url))
-
+    return None
 
 @app.route('/')
 @login_required
@@ -280,25 +280,11 @@ def lists():
 @login_required
 def chart_data():
     """Возвращает данные для построения графика распределения баллов"""
-    program = request.args.get('program', 'all')
-    date = request.args.get('date', 'all')
-    show_consent = request.args.get('consent', 'all')
-
-    query = Applicant.query
-
-    if program != 'all':
-        query = query.filter_by(program=program)
-    if date != 'all':
-        query = query.filter_by(date=date)
-    if show_consent == 'yes':
-        query = query.filter_by(consent=True)
-    elif show_consent == 'no':
-        query = query.filter_by(consent=False)
 
     applicants = query.all()
 
     # Собираем баллы для гистограммы
-    scores = [app.total for app in applicants]
+    scores = [app_.total for app_ in applicants]
 
     if not scores:
         return {
@@ -400,9 +386,9 @@ def passing_scores():
 
         # Собираем статистику по приоритетам
         priorities = {1: [], 2: [], 3: [], 4: []}
-        for app in applicants:
-            if 1 <= app.priority <= 4:
-                priorities[app.priority].append(app)
+        for app_ in applicants:
+            if 1 <= app_.priority <= 4:
+                priorities[app_.priority].append(app_)
 
         passing_data[prog] = {
             'seats': seats[prog],
@@ -411,7 +397,7 @@ def passing_scores():
             'priorities': {
                 p: {
                     'count': len(priorities[p]),
-                    'scores': [app.total for app in priorities[p][:5]]  # Топ-5 баллов
+                    'scores': [app_.total for app_ in priorities[p][:5]]  # Топ-5 баллов
                 }
                 for p in range(1, 5)
             }
@@ -438,10 +424,10 @@ def priority_cascade():
 
     # Группируем по ID абитуриента для каскада приоритетов
     applicants_by_id = {}
-    for app in applicants:
-        if app.applicant_id not in applicants_by_id:
-            applicants_by_id[app.applicant_id] = []
-        applicants_by_id[app.applicant_id].append(app)
+    for app_ in applicants:
+        if app_.applicant_id not in applicants_by_id:
+            applicants_by_id[app_.applicant_id] = []
+        applicants_by_id[app_.applicant_id].append(app_)
 
     # Формируем данные для каскада (ограничиваем для производительности)
     cascade_data = []
@@ -453,12 +439,12 @@ def priority_cascade():
             'id': app_id,
             'priorities': [
                 {
-                    'program': app.program,
-                    'priority': app.priority,
-                    'score': app.total,
+                    'program': app_.program,
+                    'priority': app_.priority,
+                    'score': app_.total,
                     'accepted': False
                 }
-                for app in apps
+                for app_ in apps
             ]
         })
 
@@ -500,10 +486,10 @@ def stats():
             continue
 
         applicants_by_id = {}
-        for app in all_apps_with_consent:
-            if app.applicant_id not in applicants_by_id:
-                applicants_by_id[app.applicant_id] = []
-            applicants_by_id[app.applicant_id].append(app)
+        for app_ in all_apps_with_consent:
+            if app_.applicant_id not in applicants_by_id:
+                applicants_by_id[app_.applicant_id] = []
+            applicants_by_id[app_.applicant_id].append(app_)
 
         for app_id, apps in applicants_by_id.items():
             apps.sort(key=lambda x: x.priority)
@@ -511,7 +497,7 @@ def stats():
         sorted_applicant_ids = sorted(
             applicants_by_id.keys(),
             key=lambda aid: (
-                max(app.total for app in applicants_by_id[aid]),
+                max(app__.total for app__ in applicants_by_id[aid]),
                 -aid
             ),
             reverse=True
@@ -523,13 +509,11 @@ def stats():
         for app_id in sorted_applicant_ids:
             apps = applicants_by_id[app_id]
 
-            enrolled_successfully = False
-            for app in apps:
-                program = app.program
+            for app_ in apps:
+                program = app_.program
                 if len(enrolled[program]) < seats[program]:
-                    enrolled[program].append(app)
+                    enrolled[program].append(app_)
                     already_enrolled.add(app_id)
-                    enrolled_successfully = True
                     break
 
         for prog in programs:
@@ -543,23 +527,23 @@ def stats():
 
             all_apps_prog = [a for a in all_applicants if a.program == prog and a.date == date]
             priority_counts = {1: 0, 2: 0, 3: 0, 4: 0}
-            for app in all_apps_prog:
-                if 1 <= app.priority <= 4:
-                    priority_counts[app.priority] += 1
+            for app_ in all_apps_prog:
+                if 1 <= app_.priority <= 4:
+                    priority_counts[app_.priority] += 1
 
             enrolled_by_priority = {1: 0, 2: 0, 3: 0, 4: 0}
-            for app in enrolled[prog]:
-                if 1 <= app.priority <= 4:
-                    enrolled_by_priority[app.priority] += 1
+            for app_ in enrolled[prog]:
+                if 1 <= app_.priority <= 4:
+                    enrolled_by_priority[app_.priority] += 1
 
             all_enrolled_ids = set()
             for apps_list in enrolled.values():
-                for app in apps_list:
-                    all_enrolled_ids.add(app.applicant_id)
+                for app_ in apps_list:
+                    all_enrolled_ids.add(app_.applicant_id)
 
             consent_not_enrolled = 0
-            for app in all_apps_prog:
-                if app.consent and app.applicant_id not in already_enrolled:
+            for app_ in all_apps_prog:
+                if app_.consent and app_.applicant_id not in already_enrolled:
                     consent_not_enrolled += 1
 
             stats_data[prog]['by_date'][date] = {
