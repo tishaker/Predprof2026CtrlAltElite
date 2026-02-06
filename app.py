@@ -112,7 +112,7 @@ def register():
         db.session.add(user)
         db.session.commit()
 
-        flash('Регистрация успешна! Теперь вы можете войти.', 'success')
+        flash('Регистрация успешна! Теперь перейдите на страницу авторизации')  # Исправлено
         return redirect(url_for('login'))
 
     return render_template('register.html')
@@ -279,20 +279,6 @@ def lists():
 @app.route('/chart_data')
 @login_required
 def chart_data():
-    program = request.args.get('program', 'all')
-    date = request.args.get('date', 'all')
-    show_consent = request.args.get('consent', 'all')
-
-    query = Applicant.query
-
-    if program != 'all':
-        query = query.filter_by(program=program)
-    if date != 'all':
-        query = query.filter_by(date=date)
-    if show_consent == 'yes':
-        query = query.filter_by(consent=True)
-    elif show_consent == 'no':
-        query = query.filter_by(consent=False)
 
     applicants = Applicant.query.all()
 
