@@ -281,9 +281,8 @@ def lists():
 def chart_data():
     """Возвращает данные для построения графика распределения баллов"""
 
-    applicants = query.all()
+    applicants = Applicant.query.all()
 
-    # Собираем баллы для гистограммы
     scores = [app_.total for app_ in applicants]
 
     if not scores:
@@ -296,12 +295,10 @@ def chart_data():
             'count': 0
         }
 
-    # Создаем интервалы для гистограммы (оптимизировано для скорости)
     min_score = min(scores)
     max_score = max(scores)
     count = len(scores)
 
-    # Быстрый расчет интервалов
     if count < 2:
         return {
             'labels': [f"{int(min_score)}"],
@@ -312,7 +309,7 @@ def chart_data():
             'count': count
         }
 
-    # Используем фиксированное количество интервалов для скорости
+
     num_bins = min(10, max(5, count // 10))
     bin_width = (max_score - min_score) / num_bins
 
@@ -326,7 +323,7 @@ def chart_data():
             'count': count
         }
 
-    # Быстрый подсчет
+
     bins = []
     data = []
 
@@ -334,7 +331,7 @@ def chart_data():
         bin_start = min_score + i * bin_width
         bin_end = bin_start + bin_width if i < num_bins - 1 else max_score + 0.1
 
-        # Быстрый подсчет
+
         count_in_bin = sum(1 for score in scores if bin_start <= score < bin_end)
 
         if count_in_bin > 0 or i == 0 or i == num_bins - 1:
