@@ -6,7 +6,7 @@
         <div class="col-md-8">
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title mb-0">👤 Профиль пользователя</h3>
+                    <h3 class="card-title mb-0">Профиль пользователя</h3>
                 </div>
                 <div class="card-body">
                     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -52,7 +52,7 @@
                     
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="mb-0">🔐 Смена пароля</h5>
+                            <h5 class="mb-0">Смена пароля</h5>
                         </div>
                         <div class="card-body">
                             <form method="POST" action="{{ url_for('change_password') }}">

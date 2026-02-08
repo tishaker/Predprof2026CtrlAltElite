@@ -56,8 +56,6 @@ def save_to_csv(program_id, day_name, applicants):
             writer.writeheader()
             writer.writerows(rows)
 
-    print(f"Создан: {filename}")
-
 def generate_all():
     all_applicants = {}
     next_id = 1000
@@ -108,8 +106,6 @@ def generate_all():
                     app.has_cons = random.random() < 0.3
 
             save_to_csv(program_id, day_name, program_applicants)
-
-    print("✅ ВСЕ ФАЙЛЫ СОЗДАНЫ!")
 
 if __name__ == "__main__":
     generate_all()

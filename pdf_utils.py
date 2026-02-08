@@ -1,4 +1,3 @@
-# pdf_utils.py
 import io
 from datetime import datetime
 from reportlab.lib import colors
@@ -13,13 +12,11 @@ import os
 
 
 def register_russian_fonts():
-    """Регистрирует русские шрифты"""
-    # Пытаемся найти шрифты в разных местах
     font_paths = [
-        'arial.ttf',  # Windows
-        '/usr/share/fonts/truetype/msttcorefonts/arial.ttf',  # Linux
-        '/Library/Fonts/Arial.ttf',  # Mac
-        'DejaVuSans.ttf',  # Linux alternative
+        'arial.ttf',
+        '/usr/share/fonts/truetype/msttcorefonts/arial.ttf',
+        '/Library/Fonts/Arial.ttf',
+        'DejaVuSans.ttf',
         '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
     ]
 
@@ -32,26 +29,20 @@ def register_russian_fonts():
             except:
                 pass
 
-    # Если не нашли шрифты, создаем простой PDF с английскими символами
     return 'Helvetica'
 
 
 def create_pdf_report(report_type, program='all', date='all', applicants_data=None):
-    """Создает PDF отчет"""
     buffer = io.BytesIO()
 
-    # Регистрируем шрифты
     font_name = register_russian_fonts()
 
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     elements = []
 
-    # Базовые стили
     styles = getSampleStyleSheet()
 
-    # Создаем стили с русскими шрифтами
     if font_name != 'Helvetica':
-        # Создаем новые стили с русскими шрифтами
         title_style = ParagraphStyle(
             'RussianTitle',
             fontName=f'{font_name}-Bold',
@@ -66,11 +57,9 @@ def create_pdf_report(report_type, program='all', date='all', applicants_data=No
             fontSize=10
         )
     else:
-        # Используем стандартные стили для английского
         title_style = styles['Heading1']
         normal_style = styles['Normal']
 
-    # Добавляем заголовок
     if report_type == 'summary':
         title = "Summary Report" if font_name == 'Helvetica' else "Сводный отчет"
     elif report_type == 'detailed':
@@ -79,8 +68,6 @@ def create_pdf_report(report_type, program='all', date='all', applicants_data=No
         title = "Competition Lists" if font_name == 'Helvetica' else "Конкурсные списки"
 
     elements.append(Paragraph(title, title_style))
-
-    # Добавляем таблицу (пример)
     if applicants_data:
         table_data = [['ID', 'Score', 'Consent']]
         for app in applicants_data:
@@ -104,7 +91,6 @@ def create_pdf_report(report_type, program='all', date='all', applicants_data=No
 
         elements.append(table)
 
-    # Добавляем дату
     elements.append(Spacer(1, 20))
     elements.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", normal_style))
 

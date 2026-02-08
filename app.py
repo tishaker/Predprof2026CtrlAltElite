@@ -23,14 +23,12 @@ login_manager.login_view = 'login'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs('reports', exist_ok=True)
 
-
-# Модель пользователя
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
-    role = db.Column(db.String(20), default='user')  # 'admin' или 'user'
+    role = db.Column(db.String(20), default='user')
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def set_password(self, password):
@@ -38,7 +36,6 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
-
 
 class Applicant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -152,8 +149,6 @@ def change_password():
     flash('Пароль успешно изменен', 'success')
     return redirect(url_for('profile'))
 
-
-# Добавляем защиту для всех маршрутов, требующих авторизации
 @app.before_request
 def require_login():
     allowed_routes = ['login', 'register', 'static']
@@ -198,8 +193,6 @@ def upload():
             file.save(filepath)
 
             df = pd.read_csv(filepath)
-
-            # Applicant.query.filter_by(date=date).delete()
 
             for _, row in df.iterrows():
                 if 'ID' in df.columns:
@@ -351,10 +344,8 @@ def chart_data():
 @app.route('/passing_scores')
 @login_required
 def passing_scores():
-    """Расчет проходных баллов на каждую программу"""
     date = request.args.get('date', 'all')
 
-    # Количество мест на каждую программу
     seats = {
         'ПМ': 40,
         'ИВТ': 50,
@@ -371,16 +362,13 @@ def passing_scores():
         if date != 'all':
             query = query.filter_by(date=date)
 
-        # Получаем всех абитуриентов с согласием, отсортированных по баллам
         applicants = query.order_by(Applicant.total.desc()).all()
 
-        # Рассчитываем проходной балл
         if len(applicants) >= seats[prog]:
             passing_score = applicants[seats[prog] - 1].total
         else:
             passing_score = 'НЕДОБОР'
 
-        # Собираем статистику по приоритетам
         priorities = {1: [], 2: [], 3: [], 4: []}
         for app_ in applicants:
             if 1 <= app_.priority <= 4:
@@ -405,7 +393,6 @@ def passing_scores():
 @app.route('/priority_cascade')
 @login_required
 def priority_cascade():
-    """Данные для визуализации каскада приоритетов"""
     program = request.args.get('program', 'all')
     date = request.args.get('date', 'all')
 
@@ -418,17 +405,14 @@ def priority_cascade():
 
     applicants = query.all()
 
-    # Группируем по ID абитуриента для каскада приоритетов
     applicants_by_id = {}
     for app_ in applicants:
         if app_.applicant_id not in applicants_by_id:
             applicants_by_id[app_.applicant_id] = []
         applicants_by_id[app_.applicant_id].append(app_)
 
-    # Формируем данные для каскада (ограничиваем для производительности)
     cascade_data = []
-    for app_id, apps in list(applicants_by_id.items())[:50]:  # Ограничим 50 абитуриентами
-        # Сортируем по приоритету
+    for app_id, apps in list(applicants_by_id.items())[:50]:
         apps.sort(key=lambda x: x.priority)
 
         cascade_data.append({
@@ -571,7 +555,6 @@ def clear_db():
 @app.route('/reports')
 @login_required
 def reports_page():
-    """Страница выбора отчетов"""
     dates = db.session.query(Applicant.date).distinct().all()
     dates = [d[0] for d in dates if d[0]]
     programs = ['ПМ', 'ИВТ', 'ИТСС', 'ИБ']
@@ -581,19 +564,15 @@ def reports_page():
 @app.route('/generate_report', methods=['POST'])
 @login_required
 def generate_report():
-    """Генерация PDF отчета - УПРОЩЕННЫЙ ВАРИАНТ"""
     report_type = request.form.get('report_type')
     program = request.form.get('program', 'all')
     date = request.form.get('date', 'all')
 
-    # Создаем PDF в памяти
     buffer = io.BytesIO()
 
-    # Создаем PDF напрямую через canvas
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    # Заголовок отчета
     c.setFont("Helvetica-Bold", 16)
 
     if report_type == 'summary':
@@ -605,7 +584,6 @@ def generate_report():
 
     c.drawString(100, height - 50, title)
 
-    # Получаем данные
     query = Applicant.query
     if date != 'all':
         query = query.filter_by(date=date)
@@ -614,11 +592,9 @@ def generate_report():
 
     applicants = query.order_by(Applicant.total.desc()).all()
 
-    # Простая таблица
     y = height - 100
     c.setFont("Helvetica-Bold", 10)
 
-    # Заголовки таблицы на английском
     headers = ["ID", "PROG", "PRIOR", "PHYS", "RUS", "MATH", "ACHV", "TOTAL", "CONS"]
     col_widths = [30, 30, 30, 30, 30, 30, 30, 30, 30]
     x = 50
@@ -630,8 +606,7 @@ def generate_report():
     y -= 20
     c.setFont("Helvetica", 9)
 
-    # Данные
-    for app_ in applicants[:30]:  # Ограничим 30 записями
+    for app_ in applicants[:30]:
         x = 50
         data = [
             str(app_.applicant_id),
@@ -651,13 +626,11 @@ def generate_report():
 
         y -= 15
 
-        # Новая страница если нужно
         if y < 50:
             c.showPage()
             y = height - 50
             c.setFont("Helvetica", 9)
 
-    # Футер
     c.setFont("Helvetica", 8)
     c.drawString(50, 30, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
@@ -673,17 +646,13 @@ def generate_report():
         mimetype='application/pdf'
     )
 
-
-# Функция для создания первого пользователя (администратора)
 def create_admin_user():
     if not User.query.filter_by(username='admin').first():
         admin = User(username='admin', email='admin@example.com', role='admin')
-        admin.set_password('admin123')  # Сменить в продакшене!
+        admin.set_password('admin123')
         db.session.add(admin)
         db.session.commit()
         print("Admin user created: username='admin', password='admin123'")
-
-
 
 if __name__ == '__main__':
     with app.app_context():
