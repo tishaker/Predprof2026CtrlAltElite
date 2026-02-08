@@ -8,6 +8,8 @@ import io
 from datetime import datetime, timezone
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here-change-this-in-production'
@@ -569,20 +571,51 @@ def generate_report():
     date = request.form.get('date', 'all')
 
     buffer = io.BytesIO()
-
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    c.setFont("Helvetica-Bold", 16)
+    try:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+
+        if os.path.exists('arial.ttf'):
+            pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
+            font_available = True
+            print("Шрифт Arial зарегистрирован")
+        else:
+            font_available = False
+            print("Файл arial.ttf не найден")
+
+    except Exception as e:
+        print(f"Ошибка регистрации шрифта: {e}")
+        font_available = False
+
+    if font_available:
+        c.setFont('Arial', 12)
+    else:
+        c.setFont('Helvetica', 12)
+
+    title_y = height - 50
+
+
+    c.setFont('Arial' if font_available else 'Helvetica', 16)
 
     if report_type == 'summary':
-        title = "SUMMARY REPORT"
+        title = "СВОДНЫЙ ОТЧЕТ"
     elif report_type == 'detailed':
-        title = "DETAILED LIST"
+        title = "ПОДРОБНЫЙ СПИСОК"
     else:
-        title = "COMPETITION LISTS"
+        title = "КОНКУРСНЫЕ СПИСКИ"
 
-    c.drawString(100, height - 50, title)
+    if program != 'all':
+        title += f" - {program}"
+    if date != 'all':
+        title += f" ({date})"
+
+    c.drawString(50, title_y, title)
+
+    c.setFont('Arial' if font_available else 'Helvetica', 12)
+    c.drawString(50, title_y - 25, f"Дата создания: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
     query = Applicant.query
     if date != 'all':
@@ -592,47 +625,50 @@ def generate_report():
 
     applicants = query.order_by(Applicant.total.desc()).all()
 
-    y = height - 100
-    c.setFont("Helvetica-Bold", 10)
+    y = title_y - 60
 
-    headers = ["ID", "PROG", "PRIOR", "PHYS", "RUS", "MATH", "ACHV", "TOTAL", "CONS"]
-    col_widths = [30, 30, 30, 30, 30, 30, 30, 30, 30]
-    x = 50
 
-    for i, header in enumerate(headers):
-        c.drawString(x, y, header)
-        x += col_widths[i]
+    if applicants:
+        headers = ["ID", "Прогр", "Приор", "Физ", "Рус", "Мат", "Дост", "Сумма", "Согл"]
+        col_widths = [40, 40, 40, 40, 40, 40, 40, 40, 40]
 
-    y -= 20
-    c.setFont("Helvetica", 9)
+        x = 30
 
-    for app_ in applicants[:30]:
-        x = 50
-        data = [
-            str(app_.applicant_id),
-            app_.program,
-            str(app_.priority),
-            str(app_.physics),
-            str(app_.russian),
-            str(app_.math),
-            str(app_.achievements),
-            str(app_.total),
-            "Y" if app_.consent else "N"
-        ]
-
-        for i, item in enumerate(data):
-            c.drawString(x, y, str(item))
+        c.setFont('Arial' if font_available else 'Helvetica', 10)
+        for i, header in enumerate(headers):
+            c.drawString(x, y, header)
+            c.line(x, y - 2, x + col_widths[i], y - 2)
             x += col_widths[i]
 
-        y -= 15
+        y -= 25
+        c.setFont('Arial' if font_available else 'Helvetica', 9)
 
-        if y < 50:
-            c.showPage()
-            y = height - 50
-            c.setFont("Helvetica", 9)
+        for i, app in enumerate(applicants[:50]):
+            if y < 50:
+                c.showPage()
+                y = height - 50
+                c.setFont('Arial' if font_available else 'Helvetica', 9)
 
-    c.setFont("Helvetica", 8)
-    c.drawString(50, 30, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+            x = 30
+            data = [
+                str(app.applicant_id),
+                app.program,
+                str(app.priority),
+                str(app.physics),
+                str(app.russian),
+                str(app.math),
+                str(app.achievements),
+                str(app.total),
+                "ДА" if app.consent else "НЕТ"
+            ]
+
+            for j, item in enumerate(data):
+                c.drawString(x, y, str(item))
+                x += col_widths[j]
+
+            y -= 15
+    c.setFont('Arial' if font_available else 'Helvetica', 10)
+    c.drawString(50, 30, f"Всего записей: {len(applicants)}")
 
     c.save()
     buffer.seek(0)
@@ -645,7 +681,7 @@ def generate_report():
         download_name=filename,
         mimetype='application/pdf'
     )
-
+    
 def create_admin_user():
     if not User.query.filter_by(username='admin').first():
         admin = User(username='admin', email='admin@example.com', role='admin')
