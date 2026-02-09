@@ -10,6 +10,12 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+import matplotlib
+matplotlib.use('Agg')  # Для работы без GUI
+import matplotlib.pyplot as plt
+import numpy as np
+from io import BytesIO
+import base64
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here-change-this-in-production'
@@ -343,6 +349,91 @@ def chart_data():
     }
 
 
+def save_charts_to_images(program='all', date='all'):
+    """Сохраняет графики как изображения для использования в PDF"""
+    images = {}
+
+    # 1. Гистограмма распределения баллов
+    query = Applicant.query
+    if program != 'all':
+        query = query.filter_by(program=program)
+    if date != 'all':
+        query = query.filter_by(date=date)
+
+    applicants = query.all()
+    scores = [app.total for app in applicants if app.total]
+
+    if scores:
+        plt.figure(figsize=(8, 5))
+        plt.hist(scores, bins=10, edgecolor='black', alpha=0.7)
+        plt.xlabel('Сумма баллов')
+        plt.ylabel('Количество абитуриентов')
+        plt.title(f'Распределение баллов ({program if program != "all" else "Все программы"})')
+        plt.grid(True, alpha=0.3)
+
+        # Сохраняем в буфер
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        plt.close()
+
+        images['histogram'] = buf.getvalue()
+
+        # 2. Круговая диаграмма по программам
+        if program == 'all':
+            programs_data = {}
+            for app in applicants:
+                if app.program not in programs_data:
+                    programs_data[app.program] = 0
+                programs_data[app.program] += 1
+
+            if programs_data:
+                plt.figure(figsize=(7, 7))
+                labels = list(programs_data.keys())
+                sizes = list(programs_data.values())
+
+                plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
+                plt.axis('equal')
+                plt.title('Распределение по программам')
+
+                buf2 = BytesIO()
+                plt.savefig(buf2, format='png', dpi=150, bbox_inches='tight')
+                plt.close()
+
+                images['pie_chart'] = buf2.getvalue()
+
+        # 3. График проходных баллов по дням (только если есть несколько дат)
+        dates = sorted(set([app.date for app in applicants if app.date]))
+        if len(dates) > 1 and program != 'all':
+            passing_scores = []
+            for d in dates:
+                daily_apps = [app for app in applicants if app.date == d and app.consent]
+                if daily_apps:
+                    daily_apps.sort(key=lambda x: x.total, reverse=True)
+                    seats = {'ПМ': 40, 'ИВТ': 50, 'ИТСС': 30, 'ИБ': 20}
+                    seat_count = seats.get(program, 20)
+                    if len(daily_apps) >= seat_count:
+                        passing_scores.append(daily_apps[seat_count - 1].total)
+                    else:
+                        passing_scores.append(daily_apps[-1].total if daily_apps else 0)
+                else:
+                    passing_scores.append(0)
+
+            plt.figure(figsize=(8, 5))
+            plt.plot(dates, passing_scores, marker='o', linewidth=2)
+            plt.xlabel('Дата')
+            plt.ylabel('Проходной балл')
+            plt.title(f'Динамика проходного балла ({program})')
+            plt.grid(True, alpha=0.3)
+            plt.xticks(rotation=45)
+
+            buf3 = BytesIO()
+            plt.savefig(buf3, format='png', dpi=150, bbox_inches='tight')
+            plt.close()
+
+            images['passing_scores'] = buf3.getvalue()
+
+    return images
+
 @app.route('/passing_scores')
 @login_required
 def passing_scores():
@@ -569,6 +660,7 @@ def generate_report():
     report_type = request.form.get('report_type')
     program = request.form.get('program', 'all')
     date = request.form.get('date', 'all')
+    include_charts = request.form.get('include_charts') == 'on'
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -581,24 +673,16 @@ def generate_report():
         if os.path.exists('arial.ttf'):
             pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
             font_available = True
-            print("Шрифт Arial зарегистрирован")
         else:
             font_available = False
-            print("Файл arial.ttf не найден")
 
     except Exception as e:
-        print(f"Ошибка регистрации шрифта: {e}")
         font_available = False
-
-    if font_available:
-        c.setFont('Arial', 12)
-    else:
-        c.setFont('Helvetica', 12)
 
     title_y = height - 50
 
-
-    c.setFont('Arial' if font_available else 'Helvetica', 16)
+    # Заголовок
+    c.setFont('Arial' if font_available else 'Helvetica-Bold', 16)
 
     if report_type == 'summary':
         title = "СВОДНЫЙ ОТЧЕТ"
@@ -617,6 +701,133 @@ def generate_report():
     c.setFont('Arial' if font_available else 'Helvetica', 12)
     c.drawString(50, title_y - 25, f"Дата создания: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
+    y_position = title_y - 60
+
+    # ВАЖНО: ДОБАВЛЯЕМ ГРАФИКИ
+    if include_charts:
+        print("DEBUG: Charts are enabled!")  # Для отладки
+
+        try:
+            import matplotlib
+            matplotlib.use('Agg')  # Важно для работы без GUI
+            import matplotlib.pyplot as plt
+            import numpy as np
+
+            # Получаем данные
+            query = Applicant.query
+            if date != 'all':
+                query = query.filter_by(date=date)
+            if program != 'all':
+                query = query.filter_by(program=program)
+
+            applicants = query.all()
+            scores = [app.total for app in applicants if app.total]
+
+            if scores and len(scores) > 1:
+                print(f"DEBUG: Found {len(scores)} scores for chart")  # Для отладки
+
+                # Создаем график
+                plt.figure(figsize=(10, 6))
+
+                # Гистограмма
+                n_bins = min(15, max(5, len(scores) // 10))
+                counts, bins, patches = plt.hist(scores, bins=n_bins,
+                                                 edgecolor='black',
+                                                 alpha=0.7,
+                                                 color='#4CAF50')
+
+                # Добавляем среднюю линию
+                avg_score = np.mean(scores)
+                plt.axvline(avg_score, color='red', linestyle='--',
+                            linewidth=2, label=f'Среднее: {avg_score:.1f}')
+
+                # Добавляем заголовки и сетку
+                plt.xlabel('Сумма баллов', fontsize=12, fontweight='bold')
+                plt.ylabel('Количество абитуриентов', fontsize=12, fontweight='bold')
+
+                chart_title = f'Распределение баллов'
+                if program != 'all':
+                    chart_title += f' ({program})'
+                if date != 'all':
+                    chart_title += f' - {date}'
+
+                plt.title(chart_title, fontsize=14, fontweight='bold', pad=20)
+                plt.grid(True, alpha=0.3, linestyle='--')
+                plt.legend()
+
+                # Добавляем значения поверх столбцов
+                for count, bin_edge in zip(counts, bins[:-1]):
+                    if count > 0:
+                        plt.text(bin_edge + (bins[1] - bins[0]) / 2, count + 0.5,
+                                 str(int(count)), ha='center', va='bottom', fontsize=9)
+
+                # Сохраняем график во временный файл
+                import tempfile
+                import uuid
+
+                # Создаем уникальное имя файла
+                temp_filename = f"temp_chart_{uuid.uuid4().hex}.png"
+                plt.savefig(temp_filename, format='png', dpi=150,
+                            bbox_inches='tight', facecolor='white')
+                plt.close()
+
+                print(f"DEBUG: Chart saved to {temp_filename}")  # Для отладки
+
+                # Добавляем заголовок графика в PDF
+                c.setFont('Arial' if font_available else 'Helvetica-Bold', 14)
+                c.drawString(50, y_position, "ГРАФИК РАСПРЕДЕЛЕНИЯ БАЛЛОВ")
+                y_position -= 25
+
+                # ВАЖНО: Проверяем существование файла
+                if os.path.exists(temp_filename):
+                    print(f"DEBUG: File exists, size: {os.path.getsize(temp_filename)} bytes")
+
+                    # Добавляем изображение в PDF
+                    try:
+                        # Используем drawImage с путем к файлу
+                        c.drawImage(temp_filename, 50, y_position - 250,
+                                    width=500, height=250, preserveAspectRatio=True)
+                        print("DEBUG: Image added to PDF successfully")
+                        y_position -= 280
+
+                    except Exception as img_error:
+                        print(f"DEBUG: Error in drawImage: {img_error}")
+                        c.setFont('Arial' if font_available else 'Helvetica', 10)
+                        c.drawString(50, y_position, f"Ошибка: {str(img_error)}")
+                        y_position -= 30
+
+                    # Удаляем временный файл
+                    try:
+                        os.remove(temp_filename)
+                        print("DEBUG: Temp file removed")
+                    except Exception as e:
+                        print(f"DEBUG: Error removing temp file: {e}")
+                else:
+                    print(f"DEBUG: File {temp_filename} does not exist!")
+                    c.setFont('Arial' if font_available else 'Helvetica', 10)
+                    c.drawString(50, y_position, "Файл графика не создан")
+                    y_position -= 30
+
+            else:
+                print("DEBUG: Not enough data for chart")
+                c.setFont('Arial' if font_available else 'Helvetica', 10)
+                c.drawString(50, y_position, "Недостаточно данных для построения графика")
+                y_position -= 30
+
+        except ImportError as e:
+            print(f"DEBUG: Import error: {e}")
+            c.setFont('Arial' if font_available else 'Helvetica', 10)
+            c.drawString(50, y_position, "Установите matplotlib: pip install matplotlib")
+            y_position -= 30
+        except Exception as e:
+            print(f"DEBUG: General error: {e}")
+            c.setFont('Arial' if font_available else 'Helvetica', 10)
+            c.drawString(50, y_position, f"Ошибка создания графика: {str(e)}")
+            y_position -= 30
+    else:
+        print("DEBUG: Charts are NOT enabled")
+
+    # ТАБЛИЦА С ДАННЫМИ
     query = Applicant.query
     if date != 'all':
         query = query.filter_by(date=date)
@@ -625,16 +836,20 @@ def generate_report():
 
     applicants = query.order_by(Applicant.total.desc()).all()
 
-    y = title_y - 60
-
+    y = y_position
 
     if applicants:
+        # Добавляем заголовок таблицы
+        c.setFont('Arial' if font_available else 'Helvetica-Bold', 12)
+        c.drawString(50, y, "СПИСОК АБИТУРИЕНТОВ:")
+        y -= 20
+
         headers = ["ID", "Прогр", "Приор", "Физ", "Рус", "Мат", "Дост", "Сумма", "Согл"]
         col_widths = [40, 40, 40, 40, 40, 40, 40, 40, 40]
 
         x = 30
 
-        c.setFont('Arial' if font_available else 'Helvetica', 10)
+        c.setFont('Arial' if font_available else 'Helvetica-Bold', 10)
         for i, header in enumerate(headers):
             c.drawString(x, y, header)
             c.line(x, y - 2, x + col_widths[i], y - 2)
@@ -644,7 +859,7 @@ def generate_report():
         c.setFont('Arial' if font_available else 'Helvetica', 9)
 
         for i, app in enumerate(applicants[:50]):
-            if y < 50:
+            if y < 100:  # Оставляем место для подвала
                 c.showPage()
                 y = height - 50
                 c.setFont('Arial' if font_available else 'Helvetica', 9)
@@ -667,13 +882,15 @@ def generate_report():
                 x += col_widths[j]
 
             y -= 15
+
+    # Подвал
     c.setFont('Arial' if font_available else 'Helvetica', 10)
     c.drawString(50, 30, f"Всего записей: {len(applicants)}")
 
     c.save()
     buffer.seek(0)
 
-    filename = f"report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    filename = f"report_with_chart_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
 
     return send_file(
         buffer,
