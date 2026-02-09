@@ -1,5 +1,6 @@
 import csv
 import random
+import os
 
 PROGRAMS = {
     1: {"name": "ПМИ", "seats": 40},
@@ -43,7 +44,12 @@ class Applicant:
             "Согласие": 1 if self.has_cons else 0
         }
 def save_to_csv(program_id, day_name, applicants):
-    filename = f"data_{day_name}_program{program_id}.csv"
+    os.makedirs("uploads", exist_ok=True)
+
+    filename = os.path.join(
+        "uploads",
+        f"data_{day_name}_program{program_id}.csv"
+    )
 
     rows = []
     for applicant in applicants:
@@ -55,6 +61,7 @@ def save_to_csv(program_id, day_name, applicants):
             writer = csv.DictWriter(f, fieldnames=rows[0].keys())
             writer.writeheader()
             writer.writerows(rows)
+
 
 def generate_all():
     all_applicants = {}
@@ -105,7 +112,7 @@ def generate_all():
                 for app in program_applicants:
                     app.has_cons = random.random() < 0.3
 
-            save_to_csv(program_id, day_name, program_applicants)
+            save_to_csv(day_name, program_id, program_applicants)
 
 if __name__ == "__main__":
     generate_all()
