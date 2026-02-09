@@ -11,7 +11,7 @@ from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import matplotlib
-matplotlib.use('Agg')  # Для работы без GUI
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from io import BytesIO
@@ -657,60 +657,82 @@ def reports_page():
 @app.route('/generate_report', methods=['POST'])
 @login_required
 def generate_report():
-    report_type = request.form.get('report_type')
-    program = request.form.get('program', 'all')
-    date = request.form.get('date', 'all')
-    include_charts = request.form.get('include_charts') == 'on'
+    print("\n" + "=" * 80)
+    print("🚀 НАЧАЛО ГЕНЕРАЦИИ ОТЧЕТА " + datetime.now().strftime("%H:%M:%S"))
+    print("=" * 80)
 
+    # Логируем ВСЕ данные формы
+    print("📋 ВСЕ ДАННЫЕ ИЗ ФОРМЫ:")
+    print(f"  Метод запроса: {request.method}")
+    print(f"  Content-Type: {request.content_type}")
+
+    if request.form:
+        for key, value in request.form.items():
+            print(f"  {key}: '{value}' (тип: {type(value).__name__})")
+    else:
+        print("  ⚠️ Форма пуста! Проверьте HTML форму.")
+
+    # Получаем параметры с значениями по умолчанию
+    report_type = request.form.get('report_type', '').strip()
+    program = request.form.get('program', 'all').strip()
+    date = request.form.get('date', 'all').strip()
+
+    # КРИТИЧЕСКИ ВАЖНО: Проверяем чекбокс
+    include_charts_raw = request.form.get('include_charts')
+    print(f"  include_charts (сырое значение): '{include_charts_raw}'")
+
+    # Преобразуем в булево
+    include_charts = include_charts_raw == 'on'
+    print(f"  include_charts (булево): {include_charts}")
+
+    print(f"\n📊 ПАРАМЕТРЫ ОТЧЕТА:")
+    print(f"  Тип отчета: '{report_type}'")
+    print(f"  Программа: '{program}'")
+    print(f"  Дата: '{date}'")
+    print(f"  Включить графики: {include_charts}")
+
+    if not report_type:
+        print("❌ ОШИБКА: Тип отчета не указан!")
+        flash('Выберите тип отчета', 'danger')
+        return redirect(url_for('reports_page'))
+
+    # Далее ваш существующий код продолжается...
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    try:
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.ttfonts import TTFont
+    # Используем только стандартные шрифты ReportLab
+    NORMAL_FONT = "Helvetica"
+    BOLD_FONT = "Helvetica-Bold"
 
-        if os.path.exists('arial.ttf'):
-            pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
-            font_available = True
-        else:
-            font_available = False
+    # ===== ЗАГОЛОВОК =====
+    c.setFont(BOLD_FONT, 18)
+    c.drawString(50, height - 40, "ОТЧЕТ ПО ПОСТУПЛЕНИЮ")
+    c.setFont(NORMAL_FONT, 12)
+    c.drawString(50, height - 70,
+                 f"Тип: {report_type} | Программа: {program if program != 'all' else 'Все'} | "
+                 f"Дата: {date if date != 'all' else 'Все'}")
 
-    except Exception as e:
-        font_available = False
+    c.drawString(50, height - 90,
+                 f"Создан: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
 
-    title_y = height - 50
+    y_position = height - 120
 
-    c.setFont('Arial' if font_available else 'Helvetica-Bold', 16)
-
-    if report_type == 'summary':
-        title = "СВОДНЫЙ ОТЧЕТ"
-    elif report_type == 'detailed':
-        title = "ПОДРОБНЫЙ СПИСОК"
-    else:
-        title = "КОНКУРСНЫЕ СПИСКИ"
-
-    if program != 'all':
-        title += f" - {program}"
-    if date != 'all':
-        title += f" ({date})"
-
-    c.drawString(50, title_y, title)
-
-    c.setFont('Arial' if font_available else 'Helvetica', 12)
-    c.drawString(50, title_y - 25, f"Дата создания: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
-
-    y_position = title_y - 60
-
+    # ===== ГРАФИКИ =====
     if include_charts:
-        print("DEBUG: Charts are enabled!")
+        print(f"\n📈 СОЗДАНИЕ ГРАФИКОВ:")
 
         try:
+            # Проверяем наличие matplotlib
             import matplotlib
-            matplotlib.use('Agg')
+            matplotlib.use('Agg')  # ОБЯЗАТЕЛЬНО!
             import matplotlib.pyplot as plt
             import numpy as np
+            from io import BytesIO
 
+            print("✅ Matplotlib импортирован успешно")
+
+            # Получаем данные
             query = Applicant.query
             if date != 'all':
                 query = query.filter_by(date=date)
@@ -718,98 +740,121 @@ def generate_report():
                 query = query.filter_by(program=program)
 
             applicants = query.all()
-            scores = [app.total for app in applicants if app.total]
+            scores = [app.total for app in applicants if app.total is not None]
 
-            if scores and len(scores) > 1:
-                print(f"DEBUG: Found {len(scores)} scores for chart")
+            print(f"✅ Получено {len(scores)} баллов")
 
+            if scores and len(scores) >= 3:
+                print(f"✅ Данные для графика: мин={min(scores)}, макс={max(scores)}, сред={np.mean(scores):.1f}")
+
+                # Создаем фигуру
                 plt.figure(figsize=(10, 6))
 
-                n_bins = min(15, max(5, len(scores) // 10))
-                counts, bins, patches = plt.hist(scores, bins=n_bins,
-                                                 edgecolor='black',
-                                                 alpha=0.7,
-                                                 color='#4CAF50')
+                # Простая гистограмма
+                plt.hist(scores,
+                         bins=min(10, len(scores)),
+                         edgecolor='black',
+                         alpha=0.7,
+                         color='#2c80c9',
+                         rwidth=0.9)
 
-                avg_score = np.mean(scores)
-                plt.axvline(avg_score, color='red', linestyle='--',
-                            linewidth=2, label=f'Среднее: {avg_score:.1f}')
+                # Средняя линия
+                avg = np.mean(scores)
+                plt.axvline(avg, color='red', linestyle='--', linewidth=2,
+                            label=f'Среднее: {avg:.1f}')
 
+                # Настройки
+                plt.title(f'Распределение баллов ({len(scores)} абитуриентов)',
+                          fontsize=14, fontweight='bold', pad=15)
                 plt.xlabel('Сумма баллов', fontsize=12, fontweight='bold')
                 plt.ylabel('Количество абитуриентов', fontsize=12, fontweight='bold')
-
-                chart_title = f'Распределение баллов'
-                if program != 'all':
-                    chart_title += f' ({program})'
-                if date != 'all':
-                    chart_title += f' - {date}'
-
-                plt.title(chart_title, fontsize=14, fontweight='bold', pad=20)
-                plt.grid(True, alpha=0.3, linestyle='--')
+                plt.grid(True, alpha=0.3, linestyle=':')
                 plt.legend()
 
-                for count, bin_edge in zip(counts, bins[:-1]):
-                    if count > 0:
-                        plt.text(bin_edge + (bins[1] - bins[0]) / 2, count + 0.5,
-                                 str(int(count)), ha='center', va='bottom', fontsize=9)
+                # Улучшаем читаемость
+                plt.tight_layout()
 
-                import tempfile
-                import uuid
-
-                temp_filename = f"temp_chart_{uuid.uuid4().hex}.png"
-                plt.savefig(temp_filename, format='png', dpi=150,
+                # Сохраняем в буфер памяти
+                img_buffer = BytesIO()
+                plt.savefig(img_buffer, format='png', dpi=150,
                             bbox_inches='tight', facecolor='white')
                 plt.close()
 
-                print(f"DEBUG: Chart saved to {temp_filename}")
+                img_buffer.seek(0)
+                img_data = img_buffer.getvalue()
+                print(f"✅ График создан ({len(img_data)} байт)")
 
-                c.setFont('Arial' if font_available else 'Helvetica-Bold', 14)
-                c.drawString(50, y_position, "ГРАФИК РАСПРЕДЕЛЕНИЯ БАЛЛОВ")
+                # Сохраняем во временный файл для надежности
+                temp_file = "temp_chart_for_pdf.png"
+                with open(temp_file, 'wb') as f:
+                    f.write(img_data)
+                print(f"✅ График сохранен в {temp_file}")
+
+                # Добавляем заголовок графика в PDF
+                c.setFont(BOLD_FONT, 14)
+                c.drawString(50, y_position, "ГРАФИК РАСПРЕДЕЛЕНИЯ БАЛЛОВ:")
                 y_position -= 25
 
-                if os.path.exists(temp_filename):
-                    print(f"DEBUG: File exists, size: {os.path.getsize(temp_filename)} bytes")
-                    try:
-                        c.drawImage(temp_filename, 50, y_position - 250,
-                                    width=500, height=250, preserveAspectRatio=True)
-                        print("DEBUG: Image added to PDF successfully")
-                        y_position -= 280
+                # Проверяем место на странице
+                if y_position < 200:
+                    c.showPage()
+                    y_position = height - 50
+                    c.setFont(BOLD_FONT, 14)
+                    c.drawString(50, y_position, "ГРАФИК РАСПРЕДЕЛЕНИЯ БАЛЛОВ:")
+                    y_position -= 25
 
-                    except Exception as img_error:
-                        print(f"DEBUG: Error in drawImage: {img_error}")
-                        c.setFont('Arial' if font_available else 'Helvetica', 10)
-                        c.drawString(50, y_position, f"Ошибка: {str(img_error)}")
-                        y_position -= 30
-                    try:
-                        os.remove(temp_filename)
-                        print("DEBUG: Temp file removed")
-                    except Exception as e:
-                        print(f"DEBUG: Error removing temp file: {e}")
-                else:
-                    print(f"DEBUG: File {temp_filename} does not exist!")
-                    c.setFont('Arial' if font_available else 'Helvetica', 10)
-                    c.drawString(50, y_position, "Файл графика не создан")
-                    y_position -= 30
+                # Вставляем изображение
+                try:
+                    # Позиция для изображения
+                    img_y = y_position - 180
+                    if img_y < 50:
+                        img_y = height - 230
+
+                    c.drawImage(temp_file,
+                                50, img_y,
+                                width=500, height=180,
+                                preserveAspectRatio=True)
+
+                    print(f"✅ График добавлен в PDF на позиции Y={img_y}")
+                    y_position = img_y - 30  # Отступ после графика
+
+                except Exception as img_err:
+                    print(f"❌ Ошибка вставки изображения: {img_err}")
+                    c.setFont(NORMAL_FONT, 10)
+                    c.drawString(50, y_position, f"Ошибка отображения графика")
+                    y_position -= 20
+
+                # Удаляем временный файл
+                try:
+                    os.remove(temp_file)
+                    print("✅ Временный файл удален")
+                except:
+                    pass
 
             else:
-                print("DEBUG: Not enough data for chart")
-                c.setFont('Arial' if font_available else 'Helvetica', 10)
-                c.drawString(50, y_position, "Недостаточно данных для построения графика")
-                y_position -= 30
+                print(f"⚠️ Недостаточно данных для графика: {len(scores)} записей")
+                c.setFont(NORMAL_FONT, 10)
+                c.drawString(50, y_position,
+                             f"Недостаточно данных для графика ({len(scores)} записей)")
+                y_position -= 20
 
         except ImportError as e:
-            print(f"DEBUG: Import error: {e}")
-            c.setFont('Arial' if font_available else 'Helvetica', 10)
-            c.drawString(50, y_position, "Установите matplotlib: pip install matplotlib")
-            y_position -= 30
-        except Exception as e:
-            print(f"DEBUG: General error: {e}")
-            c.setFont('Arial' if font_available else 'Helvetica', 10)
-            c.drawString(50, y_position, f"Ошибка создания графика: {str(e)}")
-            y_position -= 30
-    else:
-        print("DEBUG: Charts are NOT enabled")
+            print(f"❌ Matplotlib не установлен: {e}")
+            c.setFont(NORMAL_FONT, 10)
+            c.drawString(50, y_position, "Для графиков установите: pip install matplotlib")
+            y_position -= 20
 
+        except Exception as e:
+            print(f"❌ Ошибка создания графика: {e}")
+            print(f"🔍 Трассировка: {traceback.format_exc()}")
+            c.setFont(NORMAL_FONT, 10)
+            c.drawString(50, y_position, f"Ошибка: {str(e)[:60]}")
+            y_position -= 20
+
+    # ===== ДАННЫЕ АБИТУРИЕНТОВ =====
+    print(f"\n📋 ФОРМИРОВАНИЕ ТАБЛИЦЫ АБИТУРИЕНТОВ")
+
+    # Получаем данные
     query = Applicant.query
     if date != 'all':
         query = query.filter_by(date=date)
@@ -818,32 +863,45 @@ def generate_report():
 
     applicants = query.order_by(Applicant.total.desc()).all()
 
-    y = y_position
-
     if applicants:
-        c.setFont('Arial' if font_available else 'Helvetica-Bold', 12)
-        c.drawString(50, y, "СПИСОК АБИТУРИЕНТОВ:")
-        y -= 20
+        print(f"✅ Найдено {len(applicants)} абитуриентов")
 
-        headers = ["ID", "Прогр", "Приор", "Физ", "Рус", "Мат", "Дост", "Сумма", "Согл"]
-        col_widths = [40, 40, 40, 40, 40, 40, 40, 40, 40]
+        # Новая страница если нужно
+        if y_position < 100:
+            c.showPage()
+            y_position = height - 50
+
+        # Заголовок таблицы
+        c.setFont(BOLD_FONT, 14)
+        c.drawString(50, y_position, "СПИСОК АБИТУРИЕНТОВ:")
+        y_position -= 25
+
+        # Заголовки колонок
+        headers = ["ID", "Программа", "Приор", "Физ", "Рус", "Мат", "Дост", "Сумма", "Согл"]
+        col_widths = [50, 70, 40, 40, 40, 40, 45, 50, 40]
 
         x = 30
+        c.setFont(BOLD_FONT, 10)
 
-        c.setFont('Arial' if font_available else 'Helvetica-Bold', 10)
         for i, header in enumerate(headers):
-            c.drawString(x, y, header)
-            c.line(x, y - 2, x + col_widths[i], y - 2)
+            c.drawString(x, y_position, header)
             x += col_widths[i]
 
-        y -= 25
-        c.setFont('Arial' if font_available else 'Helvetica', 9)
+        # Линия под заголовками
+        c.line(30, y_position - 2, 30 + sum(col_widths), y_position - 2)
+        y_position -= 20
 
-        for i, app in enumerate(applicants[:50]):
-            if y < 100:
+        # Данные таблицы
+        c.setFont(NORMAL_FONT, 9)
+        rows_printed = 0
+
+        for app in applicants[:50]:  # Ограничиваем для читаемости
+            # Проверяем место
+            if y_position < 50:
                 c.showPage()
-                y = height - 50
-                c.setFont('Arial' if font_available else 'Helvetica', 9)
+                y_position = height - 50
+                c.setFont(NORMAL_FONT, 9)
+                rows_printed = 0
 
             x = 30
             data = [
@@ -855,22 +913,32 @@ def generate_report():
                 str(app.math),
                 str(app.achievements),
                 str(app.total),
-                "ДА" if app.consent else "НЕТ"
+                "✓" if app.consent else "✗"
             ]
 
             for j, item in enumerate(data):
-                c.drawString(x, y, str(item))
+                c.drawString(x, y_position, str(item))
                 x += col_widths[j]
 
-            y -= 15
+            y_position -= 15
+            rows_printed += 1
 
-    c.setFont('Arial' if font_available else 'Helvetica', 10)
+        print(f"✅ В таблицу добавлено {rows_printed} строк")
+
+    # ===== ФУТЕР =====
+    c.setFont(NORMAL_FONT, 9)
     c.drawString(50, 30, f"Всего записей: {len(applicants)}")
+    c.drawString(width - 150, 30, f"Страница {c.getPageNumber()}")
 
+    # ===== СОХРАНЕНИЕ =====
     c.save()
     buffer.seek(0)
 
-    filename = f"report_with_chart_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    print(f"\n✅ PDF успешно создан ({len(buffer.getvalue())} байт)")
+    print("=" * 60 + "\n")
+
+    # Имя файла
+    filename = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
 
     return send_file(
         buffer,
@@ -887,6 +955,180 @@ def create_admin_user():
         db.session.commit()
         print("Admin user created: username='admin', password='admin123'")
 
+
+@app.route('/test_chart')
+@login_required
+def test_chart():
+    """Тестовая страница для проверки работы графиков"""
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Тест графиков</title>
+        <style>
+            body { padding: 20px; font-family: Arial; }
+            .test-box { 
+                margin: 20px; 
+                padding: 20px; 
+                border: 1px solid #ccc;
+                border-radius: 10px;
+                background: #f9f9f9;
+            }
+            button {
+                padding: 10px 20px;
+                background: #3498db;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                margin: 5px;
+            }
+            button:hover {
+                background: #2980b9;
+            }
+            pre {
+                background: #2c3e50;
+                color: white;
+                padding: 15px;
+                border-radius: 5px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>🔧 Тестирование генерации PDF с графиками</h1>
+
+        <div class="test-box">
+            <h3>📊 Тест 1: С графиком (ПМ, 01.08)</h3>
+            <form action="/generate_report" method="POST">
+                <input type="hidden" name="report_type" value="competitive">
+                <input type="hidden" name="program" value="ПМ">
+                <input type="hidden" name="date" value="01.08">
+                <input type="hidden" name="include_charts" value="on">
+                <button type="submit">📥 Скачать PDF с графиком</button>
+                <small>Проверка: график должен появиться в PDF</small>
+            </form>
+        </div>
+
+        <div class="test-box">
+            <h3>📄 Тест 2: Без графика (ИВТ, все даты)</h3>
+            <form action="/generate_report" method="POST">
+                <input type="hidden" name="report_type" value="competitive">
+                <input type="hidden" name="program" value="ИВТ">
+                <input type="hidden" name="date" value="all">
+                <button type="submit">📥 Скачать PDF без графика</button>
+                <small>Проверка: обычный PDF без графиков</small>
+            </form>
+        </div>
+
+        <div class="test-box">
+            <h3>🔍 Проверка установки matplotlib:</h3>
+            <pre id="matplotlib-status">Загрузка...</pre>
+            <button onclick="checkMatplotlib()">🔄 Обновить проверку</button>
+            <script>
+                function checkMatplotlib() {
+                    document.getElementById('matplotlib-status').innerText = 'Проверка...';
+                    fetch('/check_matplotlib')
+                        .then(r => r.text())
+                        .then(text => {
+                            document.getElementById('matplotlib-status').innerText = text;
+                        });
+                }
+                checkMatplotlib(); // Автопроверка при загрузке
+            </script>
+        </div>
+
+        <div class="test-box">
+            <h3>⚡ Быстрый тест matplotlib:</h3>
+            <form action="/quick_chart_test" method="GET">
+                <button type="submit">🎨 Создать тестовый график</button>
+                <small>Создает простой график и показывает его</small>
+            </form>
+        </div>
+    </body>
+    </html>
+    '''
+
+
+@app.route('/check_matplotlib')
+def check_matplotlib():
+    """Проверка наличия matplotlib"""
+    try:
+        import matplotlib
+        import matplotlib.pyplot as plt
+        import numpy as np
+        version = matplotlib.__version__
+        return f"""✅ Matplotlib установлен успешно!
+Версия: {version}
+Путь: {matplotlib.__file__}
+
+✅ NumPy установлен: {np.__version__}
+✅ Pyplot доступен
+
+Статус: ВСЕ СИСТЕМЫ ГОТОВЫ К РАБОТЕ!"""
+    except ImportError as e:
+        return f"""❌ Matplotlib не установлен!
+Ошибка: {e}
+
+Установите: pip install matplotlib numpy
+Или: pip install -r requirements.txt"""
+    except Exception as e:
+        return f"""⚠️ Ошибка: {e}
+Проверьте установку matplotlib"""
+
+
+@app.route('/quick_chart_test')
+def quick_chart_test():
+    """Быстрый тест создания графика"""
+    try:
+        # Создаем тестовый график
+        plt.figure(figsize=(8, 4))
+        data = [250, 270, 280, 290, 300, 310, 320, 330, 340, 350]
+        plt.hist(data, bins=5, edgecolor='black', alpha=0.7, color='skyblue')
+        plt.title('Тестовый график matplotlib', fontsize=14)
+        plt.xlabel('Баллы')
+        plt.ylabel('Количество')
+        plt.grid(True, alpha=0.3)
+
+        # Сохраняем в буфер
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        plt.close()
+        buf.seek(0)
+
+        # Возвращаем как изображение
+        from flask import Response
+        return Response(buf.getvalue(), mimetype='image/png')
+
+    except Exception as e:
+        return f"❌ Ошибка создания графика: {str(e)}"
+
+
+@app.route('/debug_report')
+@login_required
+def debug_report():
+    """Отладочная страница для проверки данных"""
+    query = Applicant.query
+    total_applicants = query.count()
+
+    # Считаем по программам
+    programs = ['ПМ', 'ИВТ', 'ИТСС', 'ИБ']
+    stats = {}
+    for prog in programs:
+        stats[prog] = {
+            'total': query.filter_by(program=prog).count(),
+            'with_scores': query.filter_by(program=prog).filter(Applicant.total.isnot(None)).count(),
+            'avg_score': db.session.query(db.func.avg(Applicant.total)).filter_by(program=prog).scalar() or 0
+        }
+
+    return f'''
+    <h1>Отладка данных</h1>
+    <p>Всего абитуриентов в БД: {total_applicants}</p>
+    <h3>По программам:</h3>
+    <ul>
+        {"".join([f'<li>{prog}: {stats[prog]["total"]} записей, {stats[prog]["with_scores"]} с баллами, средний балл: {stats[prog]["avg_score"]:.1f}</li>' for prog in programs])}
+    </ul>
+    <p><a href="/test_chart">Вернуться к тестам</a></p>
+    '''
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
