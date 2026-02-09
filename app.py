@@ -681,7 +681,6 @@ def generate_report():
 
     title_y = height - 50
 
-    # Заголовок
     c.setFont('Arial' if font_available else 'Helvetica-Bold', 16)
 
     if report_type == 'summary':
@@ -703,17 +702,15 @@ def generate_report():
 
     y_position = title_y - 60
 
-    # ВАЖНО: ДОБАВЛЯЕМ ГРАФИКИ
     if include_charts:
-        print("DEBUG: Charts are enabled!")  # Для отладки
+        print("DEBUG: Charts are enabled!")
 
         try:
             import matplotlib
-            matplotlib.use('Agg')  # Важно для работы без GUI
+            matplotlib.use('Agg')
             import matplotlib.pyplot as plt
             import numpy as np
 
-            # Получаем данные
             query = Applicant.query
             if date != 'all':
                 query = query.filter_by(date=date)
@@ -724,24 +721,20 @@ def generate_report():
             scores = [app.total for app in applicants if app.total]
 
             if scores and len(scores) > 1:
-                print(f"DEBUG: Found {len(scores)} scores for chart")  # Для отладки
+                print(f"DEBUG: Found {len(scores)} scores for chart")
 
-                # Создаем график
                 plt.figure(figsize=(10, 6))
 
-                # Гистограмма
                 n_bins = min(15, max(5, len(scores) // 10))
                 counts, bins, patches = plt.hist(scores, bins=n_bins,
                                                  edgecolor='black',
                                                  alpha=0.7,
                                                  color='#4CAF50')
 
-                # Добавляем среднюю линию
                 avg_score = np.mean(scores)
                 plt.axvline(avg_score, color='red', linestyle='--',
                             linewidth=2, label=f'Среднее: {avg_score:.1f}')
 
-                # Добавляем заголовки и сетку
                 plt.xlabel('Сумма баллов', fontsize=12, fontweight='bold')
                 plt.ylabel('Количество абитуриентов', fontsize=12, fontweight='bold')
 
@@ -755,36 +748,28 @@ def generate_report():
                 plt.grid(True, alpha=0.3, linestyle='--')
                 plt.legend()
 
-                # Добавляем значения поверх столбцов
                 for count, bin_edge in zip(counts, bins[:-1]):
                     if count > 0:
                         plt.text(bin_edge + (bins[1] - bins[0]) / 2, count + 0.5,
                                  str(int(count)), ha='center', va='bottom', fontsize=9)
 
-                # Сохраняем график во временный файл
                 import tempfile
                 import uuid
 
-                # Создаем уникальное имя файла
                 temp_filename = f"temp_chart_{uuid.uuid4().hex}.png"
                 plt.savefig(temp_filename, format='png', dpi=150,
                             bbox_inches='tight', facecolor='white')
                 plt.close()
 
-                print(f"DEBUG: Chart saved to {temp_filename}")  # Для отладки
+                print(f"DEBUG: Chart saved to {temp_filename}")
 
-                # Добавляем заголовок графика в PDF
                 c.setFont('Arial' if font_available else 'Helvetica-Bold', 14)
                 c.drawString(50, y_position, "ГРАФИК РАСПРЕДЕЛЕНИЯ БАЛЛОВ")
                 y_position -= 25
 
-                # ВАЖНО: Проверяем существование файла
                 if os.path.exists(temp_filename):
                     print(f"DEBUG: File exists, size: {os.path.getsize(temp_filename)} bytes")
-
-                    # Добавляем изображение в PDF
                     try:
-                        # Используем drawImage с путем к файлу
                         c.drawImage(temp_filename, 50, y_position - 250,
                                     width=500, height=250, preserveAspectRatio=True)
                         print("DEBUG: Image added to PDF successfully")
@@ -795,8 +780,6 @@ def generate_report():
                         c.setFont('Arial' if font_available else 'Helvetica', 10)
                         c.drawString(50, y_position, f"Ошибка: {str(img_error)}")
                         y_position -= 30
-
-                    # Удаляем временный файл
                     try:
                         os.remove(temp_filename)
                         print("DEBUG: Temp file removed")
@@ -827,7 +810,6 @@ def generate_report():
     else:
         print("DEBUG: Charts are NOT enabled")
 
-    # ТАБЛИЦА С ДАННЫМИ
     query = Applicant.query
     if date != 'all':
         query = query.filter_by(date=date)
@@ -839,7 +821,6 @@ def generate_report():
     y = y_position
 
     if applicants:
-        # Добавляем заголовок таблицы
         c.setFont('Arial' if font_available else 'Helvetica-Bold', 12)
         c.drawString(50, y, "СПИСОК АБИТУРИЕНТОВ:")
         y -= 20
@@ -859,7 +840,7 @@ def generate_report():
         c.setFont('Arial' if font_available else 'Helvetica', 9)
 
         for i, app in enumerate(applicants[:50]):
-            if y < 100:  # Оставляем место для подвала
+            if y < 100:
                 c.showPage()
                 y = height - 50
                 c.setFont('Arial' if font_available else 'Helvetica', 9)
@@ -883,7 +864,6 @@ def generate_report():
 
             y -= 15
 
-    # Подвал
     c.setFont('Arial' if font_available else 'Helvetica', 10)
     c.drawString(50, 30, f"Всего записей: {len(applicants)}")
 
