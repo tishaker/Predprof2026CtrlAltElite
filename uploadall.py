@@ -6,6 +6,8 @@ BASE_URL = "http://localhost:5000"
 USERNAME = "admin"
 PASSWORD = "admin123"
 
+UPLOAD_DIR = "uploads"
+
 FILES_TO_UPLOAD = [
     ("01.08", "data_01.08_program1.csv"),
     ("01.08", "data_01.08_program2.csv"),
@@ -31,54 +33,67 @@ FILES_TO_UPLOAD = [
 
 def login(session):
     login_url = f"{BASE_URL}/login"
-    login_data = {"username": USERNAME, "password": PASSWORD, "next": "/"}
+    data = {
+        "username": USERNAME,
+        "password": PASSWORD,
+        "next": "/"
+    }
 
-    response = session.post(login_url, data=login_data, allow_redirects=False)
-    if response.status_code == 302:
-        return True
+    response = session.post(login_url, data=data, allow_redirects=True)
+    return response.status_code == 200
 
-    response = session.post(login_url, data=login_data, allow_redirects=True)
-    return "Вы успешно вошли" in response.text
-
+cleared_dates = set()
 
 def upload_file(session, date, filename):
-    if not os.path.exists(filename):
-        return False
-    try:
-        with open(filename, 'rb') as f:
-            files = {'csv_file': (filename, f, 'text/csv')}
-            data = {'date': date}
+    filepath = os.path.join(UPLOAD_DIR, filename)
 
-            response = session.post(f"{BASE_URL}/upload",
-                                    files=files,
-                                    data=data,
-                                    timeout=30)
-
-            return response.status_code == 200 and "успешно загружены" in response.text
-    except:
+    if not os.path.exists(filepath):
+        print(f"Файл не найден: {filepath}")
         return False
 
+    data = {"date": date}
+
+    if date in cleared_dates:
+        data["skip_clear"] = "1"
+
+    with open(filepath, "rb") as f:
+        files = {"csv_file": (filename, f, "text/csv")}
+        response = session.post(
+            f"{BASE_URL}/upload",
+            files=files,
+            data=data,
+            allow_redirects=True
+        )
+
+    if response.status_code == 200:
+        print(f"Загружено: {filename}")
+        cleared_dates.add(date)
+        return True
+
+    print(f"Ошибка загрузки: {filename}")
+    return False
 
 def main():
     try:
-        test = requests.get(BASE_URL, timeout=2)
-        if test.status_code != 200:
-            return
+        requests.get(BASE_URL, timeout=2)
     except:
+        print("Сервер не запущен")
         return
 
     session = requests.Session()
 
     if not login(session):
+        print("Не удалось войти")
         return
 
-    success_count = 0
+    success = 0
     for date, filename in FILES_TO_UPLOAD:
         if upload_file(session, date, filename):
-            success_count += 1
+            success += 1
         time.sleep(0.1)
-    if success_count == 16:
-        print("Данные загружены")
+
+    print(f"\nИтого загружено: {success} / {len(FILES_TO_UPLOAD)}")
+
 
 if __name__ == "__main__":
     main()

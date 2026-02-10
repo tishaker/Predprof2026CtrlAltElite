@@ -183,8 +183,10 @@ def require_login():
 @app.route('/')
 @login_required
 def index():
-    dates = db.session.query(Applicant.date).distinct().all()
-    dates = [d[0] for d in dates if d[0]]
+    dates = sorted(
+        {a.date for a in Applicant.query.all() if a.date},
+        key=lambda d: datetime.strptime(d, "%d.%m")
+    )
 
     programs = ['ПМ', 'ИВТ', 'ИТСС', 'ИБ']
     stat = {}
@@ -210,6 +212,10 @@ def upload():
             flash('Выберите файл и дату', 'danger')
             return redirect(url_for('upload'))
 
+        if not request.form.get("skip_clear"):
+            Applicant.query.filter_by(date=date).delete()
+            db.session.commit()
+
         try:
             filename = f"{date}_{file.filename}"
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -225,7 +231,7 @@ def upload():
 
                 applicant = Applicant(
                     applicant_id=app_id,
-                    consent=bool(row.get('Согласие', False)),
+                    consent=int(row.get('Согласие', 0)) == 1,
                     priority=int(row.get('Приоритет', 1)),
                     physics=int(row.get('Физика', 0)),
                     russian=int(row.get('Русский', 0)),
@@ -541,7 +547,10 @@ def priority_cascade():
 @login_required
 def stats():
     seats = {'ПМ': 40, 'ИВТ': 50, 'ИТСС': 30, 'ИБ': 20}
-    dates = ['01.08', '02.08', '03.08', '04.08']
+    dates = sorted(
+        {a.date for a in Applicant.query.all() if a.date},
+        key=lambda d: datetime.strptime(d, "%d.%m")
+    )
     programs = ['ПМ', 'ИВТ', 'ИТСС', 'ИБ']
 
     all_applicants = Applicant.query.all()
@@ -660,6 +669,10 @@ def clear_db():
 def reports_page():
     dates = db.session.query(Applicant.date).distinct().all()
     dates = [d[0] for d in dates if d[0]]
+    dates = sorted(
+        dates,
+        key=lambda d: datetime.strptime(d, "%d.%m")
+    )
     programs = ['ПМ', 'ИВТ', 'ИТСС', 'ИБ']
     return render_template('reports.html', dates=dates, programs=programs)
 

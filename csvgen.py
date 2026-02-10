@@ -3,28 +3,42 @@ import random
 import os
 
 PROGRAMS = {
-    1: {"name": "ПМИ", "seats": 40},
+    1: {"name": "ПМ", "seats": 40},
     2: {"name": "ИВТ", "seats": 50},
     3: {"name": "ИТСС", "seats": 30},
     4: {"name": "ИБ", "seats": 20},
 }
 
 D_COUNT = {
-    "01.08": {"ПМИ": 60, "ИВТ": 100, "ИТСС": 50, "ИБ": 70},
-    "02.08": {"ПМИ": 380, "ИВТ": 370, "ИТСС": 350, "ИБ": 260},
-    "03.08": {"ПМИ": 1000, "ИВТ": 1150, "ИТСС": 1050, "ИБ": 800},
-    "04.08": {"ПМИ": 1240, "ИВТ": 1390, "ИТСС": 1240, "ИБ": 1190}
+    "01.08": {"ПМ": 60, "ИВТ": 100, "ИТСС": 50, "ИБ": 70},
+    "02.08": {"ПМ": 380, "ИВТ": 370, "ИТСС": 350, "ИБ": 260},
+    "03.08": {"ПМ": 1000, "ИВТ": 1150, "ИТСС": 1050, "ИБ": 800},
+    "04.08": {"ПМ": 1240, "ИВТ": 1390, "ИТСС": 1240, "ИБ": 1190}
+}
+
+BASE_TOTAL = {
+    "ПМ": 285,
+    "ИБ": 275,
+    "ИВТ": 265,
+    "ИТСС": 245
+}
+
+DAY_SHIFT = {
+    "01.08": 0,
+    "02.08": 5,
+    "03.08": 10,
+    "04.08": 20
 }
 
 class Applicant:
     def __init__(self, id):
         self.id = id
         self.applications = {}
-        self.physics = random.randint(40, 100)
-        self.russian = random.randint(50, 100)
-        self.math = random.randint(40, 100)
-        self.achievement = random.randint(0, 20)
-        self.total = self.physics + self.russian + self.math + self.achievement
+        self.physics = 0
+        self.russian = 0
+        self.math = 0
+        self.achievement = random.randint(0, 10)
+        self.total = 0
         self.has_cons = False
 
     def add_application(self, program_id, priority):
@@ -93,26 +107,38 @@ def generate_all():
                 if program_id not in applicant.applications:
                     priority = random.randint(1, 4)
                     applicant.add_application(program_id, priority)
+                    program_short = {1: "ПМ", 2: "ИВТ", 3: "ИТСС", 4: "ИБ"}[program_id]
+
+                    base = BASE_TOTAL[program_short]
+                    shift = DAY_SHIFT[day_name]
+
+                    target_total = base + shift + random.randint(-10, 10)
+
+                    # Раскидываем сумму по предметам
+                    applicant.math = random.randint(60, 100)
+                    applicant.russian = random.randint(60, 100)
+                    remaining = target_total - applicant.math - applicant.russian
+
+                    applicant.physics = max(40, remaining)
+                    applicant.total = (
+                            applicant.physics +
+                            applicant.math +
+                            applicant.russian +
+                            applicant.achievement
+                    )
                     program_applicants.append(applicant)
 
             if day_name == "04.08":
-                cons_count = 0
-                for app in program_applicants:
-                    will_cons = random.random() < 0.8
-                    app.has_cons = will_cons
-                    if will_cons:
-                        cons_count += 1
+                program_applicants.sort(key=lambda x: x.total, reverse=True)
 
-                if cons_count <= program_seats:
-                    for app in program_applicants:
-                        if not app.has_cons and random.random() < 0.5:
-                            app.has_cons = True
-                            cons_count += 1
+                for i, app in enumerate(program_applicants):
+                    app.has_cons = i < program_seats + 5
+
             else:
                 for app in program_applicants:
                     app.has_cons = random.random() < 0.3
 
-            save_to_csv(day_name, program_id, program_applicants)
+            save_to_csv(program_id, day_name, program_applicants)
 
 if __name__ == "__main__":
     generate_all()
