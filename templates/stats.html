@@ -25,7 +25,7 @@
                     <tr>
                         <td><strong>{{ date }}</strong></td>
                         <td>{{ stats[prog].by_date[date].total }}</td>
-                        <td>{{ stats[prog].by_date[date].consent }}</td>
+                        <td>{{ stats[prog].by_date[date].total_consent }}</td>
                         <td>
                             <span class="badge {% if stats[prog].by_date[date].passing_score == 'НЕДОБОР' %}bg-warning text-dark{% else %}bg-success{% endif %}" style="font-size: 1em;">
                                 {{ stats[prog].by_date[date].passing_score }}

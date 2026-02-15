@@ -231,7 +231,7 @@ def upload():
 
                 applicant = Applicant(
                     applicant_id=app_id,
-                    consent=int(row.get('Согласие', 0)) == 1,
+                    consent = True if str(row.get('Согласие')).strip() == '1' else False,
                     priority=int(row.get('Приоритет', 1)),
                     physics=int(row.get('Физика', 0)),
                     russian=int(row.get('Русский', 0)),
@@ -563,20 +563,6 @@ def stats():
     for date in dates:
         all_apps_with_consent = [a for a in all_applicants if a.date == date and a.consent]
 
-        if not all_apps_with_consent:
-            for prog in programs:
-                stats_data[prog]['by_date'][date] = {
-                    'total': 0,
-                    'total_consent': 0,
-                    'enrolled': 0,
-                    'consent_not_enrolled': 0,
-                    'passing_score': 'НЕТ ДАННЫХ',
-                    'priority_counts': {1: 0, 2: 0, 3: 0, 4: 0},
-                    'enrolled_by_priority': {1: 0, 2: 0, 3: 0, 4: 0},
-                    'enrolled_list': []
-                }
-            continue
-
         applicants_by_id = {}
         for app_ in all_apps_with_consent:
             if app_.applicant_id not in applicants_by_id:
@@ -648,6 +634,10 @@ def stats():
                 'enrolled_by_priority': enrolled_by_priority,
                 'enrolled_list': enrolled[prog]
             }
+    print("=== DEBUG CONSENT ===")
+    for a in Applicant.query.limit(10).all():
+        print(a.applicant_id, a.date, a.program, a.consent)
+    print("=====================")
 
     return render_template('stats.html',
                            stats=stats_data,

@@ -114,7 +114,6 @@ def generate_all():
 
                     target_total = base + shift + random.randint(-10, 10)
 
-                    # Раскидываем сумму по предметам
                     applicant.math = random.randint(60, 100)
                     applicant.russian = random.randint(60, 100)
                     remaining = target_total - applicant.math - applicant.russian
@@ -134,6 +133,9 @@ def generate_all():
                 for i, app in enumerate(program_applicants):
                     app.has_cons = i < program_seats + 5
 
+            elif day_name == "01.08":
+                for app in program_applicants:
+                    app.has_cons = random.random() < 0.1
             else:
                 for app in program_applicants:
                     app.has_cons = random.random() < 0.3
