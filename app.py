@@ -287,15 +287,23 @@ def lists():
 
     dates = [d[0] for d in db.session.query(Applicant.date).distinct().all() if d[0]]
     programs = [p[0] for p in db.session.query(Applicant.program).distinct().all() if p[0]]
+    total_count = len(applicants)
+    consent_count = len([a for a in applicants if a.consent])
+    consent_percent = round((consent_count / total_count * 100), 1) if total_count > 0 else 0
 
-    return render_template('lists.html',
-                           applicants=applicants,
-                           dates=dates,
-                           programs=programs,
-                           current_program=program,
-                           current_date=date,
-                           show_consent=show_consent,
-                           now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
+    return render_template(
+        'lists.html',
+        applicants=applicants,
+        dates=dates,
+        programs=programs,
+        current_program=program,
+        current_date=date,
+        show_consent=show_consent,
+        total_count=total_count,
+        consent_count=consent_count,
+        consent_percent=consent_percent,
+        now=datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    )
 
 
 @app.route('/chart_data')
@@ -634,10 +642,6 @@ def stats():
                 'enrolled_by_priority': enrolled_by_priority,
                 'enrolled_list': enrolled[prog]
             }
-    print("=== DEBUG CONSENT ===")
-    for a in Applicant.query.limit(10).all():
-        print(a.applicant_id, a.date, a.program, a.consent)
-    print("=====================")
 
     return render_template('stats.html',
                            stats=stats_data,
@@ -681,7 +685,7 @@ def generate_report():
 
     RUSSIAN_FONT = "RussianArial"
     RUSSIAN_FONT_BOLD = "RussianArial"
-    print(f"✅ Используем шрифт: {RUSSIAN_FONT}")
+    print(f"Используем шрифт: {RUSSIAN_FONT}")
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -701,7 +705,7 @@ def generate_report():
     y_position = height - 120
 
     if include_charts:
-        print(f"\n📈 СОЗДАНИЕ ГРАФИКОВ:")
+        print(f"\nСОЗДАНИЕ ГРАФИКОВ:")
 
         try:
             import matplotlib
